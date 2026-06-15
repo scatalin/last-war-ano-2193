@@ -1,0 +1,14 @@
+package com.lastwar.ano2193;
+
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@SpringBootApplication
+@EnableScheduling
+public class LastWarApplication {
+
+    public static void main(String[] args) {
+        SpringApplication.run(LastWarApplication.class, args);
+    }
+}
