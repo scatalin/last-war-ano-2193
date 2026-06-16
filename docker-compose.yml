@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ${APP_RESOURCES_DIR:-./test-resources}/data:/app/data
+      - ${APP_RESOURCES_DIR:-./test-resources}/uploads:/app/uploads
+    environment:
+      # Disable H2 console and reduce log verbosity in production
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      LOGGING_LEVEL_COM_LASTWAR: "INFO"
