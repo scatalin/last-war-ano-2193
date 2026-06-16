@@ -8,6 +8,8 @@ VS Code (with *Markdown Preview Mermaid Support*). See
 - [1. Layered architecture overview](#1-layered-architecture-overview)
 - [2. Class diagram (whole application)](#2-class-diagram-whole-application)
 - [3. Sequence diagrams (per controller endpoint)](#3-sequence-diagrams-per-controller-endpoint)
+- [4. Deployment diagram](#4-deployment-diagram)
+- [5. PhotoUpload state diagram](#5-photoupload-state-diagram)
 
 ---
 
@@ -584,6 +586,105 @@ sequenceDiagram
     CS->>FS: write data/rankings.csv
     C-->>U: 302 redirect:/admin/data (success flash)
 ```
+
+---
+
+## 4. Deployment diagram
+
+Single-host deployment: one JVM process running the Spring Boot fat JAR with
+an embedded Tomcat and an in-process H2 engine. All paths are relative to the
+working directory of the JAR. `AUTO_SERVER=TRUE` on the H2 URL allows a second
+JVM (e.g. the H2 console run separately) to connect via TCP without changing the
+primary connection.
+
+```mermaid
+flowchart TB
+    subgraph client["Client"]
+        browser["Browser"]
+    end
+
+    subgraph host["Host (server / workstation)"]
+        subgraph jvm["JVM — ano2193-0.0.2-SNAPSHOT.jar"]
+            tomcat["Embedded Tomcat\n(:8080)"]
+            subgraph ctx["Spring ApplicationContext"]
+                sec2["SecurityFilterChain"]
+                ctrl2["Controllers"]
+                svc2["Services"]
+                repo2["Repositories (JPA / Hibernate)"]
+                sched2["CsvPersistenceScheduler\n(every 5 min)"]
+            end
+            h2eng["H2 Engine\n(in-process · file mode\nAUTO_SERVER=TRUE)"]
+        end
+
+        subgraph fs["File System (relative to JAR working dir)"]
+            dbfile[("data/appdb.mv.db\nH2 database file")]
+            csvfile[["data/rankings.csv\nCSV snapshot"]]
+            uploadsdir[["uploads/\n*.jpg · *.png · …"]]
+        end
+    end
+
+    browser -->|"HTTP :8080"| tomcat
+    tomcat --> sec2
+    sec2 --> ctrl2
+    ctrl2 --> svc2
+    svc2 --> repo2
+    repo2 --> h2eng
+    sched2 --> svc2
+    h2eng <-. read/write .-> dbfile
+    svc2 -. write .-> csvfile
+    svc2 -. read/write .-> uploadsdir
+```
+
+**Runtime notes**
+
+| Concern | Detail |
+|---------|--------|
+| HTTP port | `8080` (Spring Boot default; override with `--server.port`) |
+| Database | H2 file-mode (`./data/appdb.mv.db`); survives restarts |
+| Upload storage | `./uploads/` — files renamed to UUID on ingest |
+| CSV snapshot | `./data/rankings.csv` — written on every upload and on the 5-min schedule |
+| H2 console | Available at `/h2-console` (dev only; disable in production) |
+
+---
+
+## 5. PhotoUpload state diagram
+
+The `PhotoUpload.status` field (defined as `PENDING | PROCESSING | PROCESSED | FAILED`
+in the model comment) tracks the lifecycle of each uploaded image through the ingest
+pipeline. In the current implementation the record is created directly in
+`PROCESSING`; `PENDING` is reserved for a future queued/async upload flow.
+
+```mermaid
+stateDiagram-v2
+    [*] --> PROCESSING : POST /upload\nrecord persisted
+
+    PROCESSING --> PROCESSED : file saved · OCR run\nentries persisted · CSV exported
+    PROCESSING --> FAILED   : IOException at any step
+
+    PROCESSED --> [*]
+    FAILED    --> [*]
+
+    note right of PROCESSING
+        1. File copied to uploads/ (UUID rename)
+        2. ImageParsingService.parseImage()
+        3. RankingService.saveAll(entries)
+        4. CsvService.exportRankingsToCsv()
+    end note
+
+    note right of FAILED
+        PhotoUpload.notes stores
+        IOException.getMessage()
+    end note
+```
+
+**State reference**
+
+| Status | Set by | Meaning |
+|--------|--------|---------|
+| `PENDING` | *(reserved)* | Queued but not yet picked up |
+| `PROCESSING` | `PhotoController.handleUpload` on record creation | Pipeline in progress |
+| `PROCESSED` | `PhotoController.handleUpload` on success | Entries extracted and persisted |
+| `FAILED` | `PhotoController.handleUpload` on `IOException` | Pipeline aborted; see `notes` field |
 
 ---
 
