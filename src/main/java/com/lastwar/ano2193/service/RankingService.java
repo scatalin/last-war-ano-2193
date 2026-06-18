@@ -60,6 +60,11 @@ public class RankingService {
         repository.deleteById(id);
     }
 
+    public void deleteBySourcePhotoPath(String sourcePhotoPath) {
+        log.debug("deleteBySourcePhotoPath sourcePhotoPath={}", sourcePhotoPath);
+        repository.deleteBySourcePhotoPath(sourcePhotoPath);
+    }
+
     public long count() {
         long n = repository.count();
         log.trace("count → {}", n);

@@ -2,6 +2,7 @@ package com.lastwar.ano2193.repository;
 
 import com.lastwar.ano2193.model.RankingEntry;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 public interface RankingEntryRepository extends JpaRepository<RankingEntry, Long> {
@@ -11,4 +12,7 @@ public interface RankingEntryRepository extends JpaRepository<RankingEntry, Long
     List<RankingEntry> findBySubmittedBy(String submittedBy);
 
     List<RankingEntry> findByPlayerNameContainingIgnoreCase(String playerName);
+
+    @Transactional
+    void deleteBySourcePhotoPath(String sourcePhotoPath);
 }

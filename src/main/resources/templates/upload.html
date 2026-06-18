@@ -69,10 +69,16 @@
             </span>
           </td>
           <td th:text="${u.notes}">–</td>
-          <td>
+          <td class="d-flex gap-2">
             <a th:if="${u.filename != null}"
                th:href="@{/upload/file/{id}(id=${u.id})}"
                class="btn btn-sm btn-outline-light">Download</a>
+            <form th:if="${u.filename != null}"
+                  th:action="@{/upload/reparse/{id}(id=${u.id})}"
+                  method="post" style="display:inline">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button type="submit" class="btn btn-sm btn-outline-warning">Re-parse</button>
+            </form>
           </td>
         </tr>
       </tbody>

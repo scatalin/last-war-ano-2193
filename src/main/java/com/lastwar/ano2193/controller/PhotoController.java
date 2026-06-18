@@ -133,6 +133,59 @@ public class PhotoController {
         return "redirect:/upload";
     }
 
+    @PostMapping("/reparse/{id}")
+    public String reparsePhoto(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails,
+            RedirectAttributes redirectAttributes) {
+
+        log.debug("POST /upload/reparse/{} user={}", id, userDetails.getUsername());
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(id);
+        if (opt.isEmpty() || opt.get().getFilename() == null) {
+            log.debug("reparsePhoto: id={} not found or has no stored file", id);
+            redirectAttributes.addFlashAttribute("error", "Upload not found.");
+            return "redirect:/upload";
+        }
+
+        PhotoUpload upload = opt.get();
+        Path file = Paths.get(uploadDir).resolve(upload.getFilename()).normalize();
+        if (!file.toFile().exists()) {
+            log.debug("reparsePhoto: file missing path={}", file);
+            redirectAttributes.addFlashAttribute("error", "Stored file not found on disk.");
+            return "redirect:/upload";
+        }
+
+        upload.setStatus("PROCESSING");
+        photoUploadRepository.save(upload);
+
+        try {
+            log.debug("reparsePhoto: deleting old entries for sourcePhotoPath={}", upload.getFilename());
+            rankingService.deleteBySourcePhotoPath(upload.getFilename());
+
+            log.debug("reparsePhoto: invoking image parser for storedName={}", upload.getFilename());
+            List<RankingEntry> entries = imageParsingService.parseImage(
+                    file.toFile(), upload.getCategory(), userDetails.getUsername());
+            log.trace("reparsePhoto: parser returned {} entries", entries.size());
+            rankingService.saveAll(entries);
+            csvService.exportRankingsToCsv();
+
+            upload.setStatus("PROCESSED");
+            upload.setNotes(entries.size() + " entries extracted");
+            photoUploadRepository.save(upload);
+            log.debug("reparsePhoto: complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());
+
+            redirectAttributes.addFlashAttribute("success",
+                    "Re-parse complete. " + entries.size() + " entries extracted.");
+        } catch (Exception e) {
+            log.error("Re-parse error for id={}", id, e);
+            upload.setStatus("FAILED");
+            upload.setNotes(e.getMessage());
+            photoUploadRepository.save(upload);
+            redirectAttributes.addFlashAttribute("error", "Re-parse failed: " + e.getMessage());
+        }
+        return "redirect:/upload";
+    }
+
     @GetMapping("/file/{id}")
     public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
         log.debug("GET /upload/file/{}", id);
