@@ -120,25 +120,31 @@ public class PhotoController {
 
             String rawOcrText = null;
             List<RankingEntry> entries = Collections.emptyList();
+            boolean ocrFailed = false;
             try {
-                log.debug("handleUpload: running OCR for storedName={}", storedName);
+                log.info("handleUpload: starting OCR for storedName={}", storedName);
                 rawOcrText = imageParsingService.extractRawText(target.toFile());
-                log.debug("handleUpload: OCR raw output for '{}':\n{}", storedName, rawOcrText);
                 entries = imageParsingService.parseOcrText(
                         rawOcrText, safeCategory, userDetails.getUsername(), storedName);
+                log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
             } catch (TesseractException e) {
-                log.warn("handleUpload: OCR unavailable for '{}': {}", storedName, e.getMessage());
+                ocrFailed = true;
+                log.warn("handleUpload: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
+                        storedName, e.getMessage());
             }
-            log.trace("handleUpload: parser returned {} entries", entries.size());
 
             upload.setRawOcrText(rawOcrText);
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
-            upload.setStatus("PRE_PARSED");
-            upload.setNotes(entries.size() + " entries extracted");
+            if (ocrFailed) {
+                upload.setStatus("FAILED");
+                upload.setNotes("OCR failed — re-parse or add entries manually");
+            } else {
+                upload.setStatus("PRE_PARSED");
+                upload.setNotes(entries.size() + " entries extracted");
+            }
             photoUploadRepository.save(upload);
-            log.debug("handleUpload: complete storedName={} entriesExtracted={}", storedName, entries.size());
 
             redirectAttributes.addFlashAttribute("success",
                     "Upload complete. " + entries.size() + " entries extracted.");
@@ -178,30 +184,36 @@ public class PhotoController {
         photoUploadRepository.save(upload);
 
         try {
-            log.debug("reparsePhoto: deleting old entries for sourcePhotoPath={}", upload.getFilename());
+            log.info("reparsePhoto: deleting old entries for sourcePhotoPath={}", upload.getFilename());
             rankingService.deleteBySourcePhotoPath(upload.getFilename());
 
             String rawOcrText = null;
             List<RankingEntry> entries = Collections.emptyList();
+            boolean ocrFailed = false;
             try {
-                log.debug("reparsePhoto: running OCR for storedName={}", upload.getFilename());
+                log.info("reparsePhoto: starting OCR for storedName={}", upload.getFilename());
                 rawOcrText = imageParsingService.extractRawText(filePath.toFile());
-                log.debug("reparsePhoto: OCR raw output for '{}':\n{}", upload.getFilename(), rawOcrText);
                 entries = imageParsingService.parseOcrText(
                         rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
+                log.info("reparsePhoto: OCR complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());
             } catch (TesseractException e) {
-                log.warn("reparsePhoto: OCR unavailable for '{}': {}", upload.getFilename(), e.getMessage());
+                ocrFailed = true;
+                log.warn("reparsePhoto: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
+                        upload.getFilename(), e.getMessage());
             }
-            log.trace("reparsePhoto: parser returned {} entries", entries.size());
 
             upload.setRawOcrText(rawOcrText);
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
-            upload.setStatus("REVIEW_REQUIRED");
-            upload.setNotes(entries.size() + " entries extracted");
+            if (ocrFailed) {
+                upload.setStatus("FAILED");
+                upload.setNotes("OCR failed — re-parse or add entries manually");
+            } else {
+                upload.setStatus("REVIEW_REQUIRED");
+                upload.setNotes(entries.size() + " entries extracted");
+            }
             photoUploadRepository.save(upload);
-            log.debug("reparsePhoto: complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());
 
             redirectAttributes.addFlashAttribute("success",
                     "Re-parse complete. " + entries.size() + " entries extracted.");

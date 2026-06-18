@@ -41,13 +41,23 @@ public class ImageParsingService {
      * @throws TesseractException if the OCR engine fails (e.g. missing tessdata)
      */
     public String extractRawText(File imageFile) throws TesseractException {
-        log.debug("extractRawText: file='{}'", imageFile.getName());
+        log.info("OCR start: file='{}' size={}B", imageFile.getName(), imageFile.length());
         ITesseract tesseract = new Tesseract();
         tesseract.setDatapath(tessDataPath);
         tesseract.setLanguage("eng");
         tesseract.setOcrEngineMode(1);  // LSTM neural-net mode
         tesseract.setPageSegMode(6);    // Assume a uniform block of text
-        return tesseract.doOCR(imageFile);
+        String result = tesseract.doOCR(imageFile);
+        boolean blank = result == null || result.isBlank();
+        log.info("OCR end: file='{}' chars={} blank={}",
+                imageFile.getName(), result == null ? -1 : result.length(), blank);
+        if (blank) {
+            log.warn("OCR returned blank text for '{}' — image may be unreadable or unsupported",
+                    imageFile.getName());
+        } else {
+            log.info("OCR raw text for '{}':\n>>>\n{}\n<<<", imageFile.getName(), result);
+        }
+        return result;
     }
 
     public List<RankingEntry> parseImage(File imageFile, String category, String submittedBy) {
