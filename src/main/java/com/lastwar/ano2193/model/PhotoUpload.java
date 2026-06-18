@@ -14,6 +14,7 @@ public class PhotoUpload {
     private String filename;
     private String originalFilename;
     private String category;
+    private Long categoryInstanceId;
     private String uploadedBy;
     private LocalDateTime uploadedAt;
 
@@ -37,6 +38,9 @@ public class PhotoUpload {
 
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+
+    public Long getCategoryInstanceId() { return categoryInstanceId; }
+    public void setCategoryInstanceId(Long categoryInstanceId) { this.categoryInstanceId = categoryInstanceId; }
 
     public String getUploadedBy() { return uploadedBy; }
     public void setUploadedBy(String uploadedBy) { this.uploadedBy = uploadedBy; }

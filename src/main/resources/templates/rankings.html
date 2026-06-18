@@ -15,62 +15,121 @@
 <div class="container mt-4">
   <h2 class="mb-4">Rankings</h2>
 
-  <!-- Category filter -->
-  <form method="get" th:action="@{/rankings}" class="row g-2 mb-4">
-    <div class="col-auto">
-      <select name="category" class="form-select form-select-sm">
-        <option value="">All Categories</option>
-        <option th:each="cat : ${categories}"
-                th:value="${cat}"
-                th:text="${cat}"
-                th:selected="${cat == selectedCategory}"></option>
-      </select>
+  <!-- ── Event filter ────────────────────────────────────────────────────── -->
+  <div class="card bg-secondary mb-4">
+    <div class="card-body">
+      <form method="get" th:action="@{/rankings}" class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label for="cat-picker" class="form-label small">Category</label>
+          <select id="cat-picker" class="form-select">
+            <option value="">— select category —</option>
+            <option th:each="cat : ${categories}"
+                    th:value="${cat.id}"
+                    th:text="${cat.name}">
+            </option>
+          </select>
+        </div>
+        <div class="col-md-5">
+          <label for="instanceId" class="form-label small">Event</label>
+          <select id="instanceId" name="instanceId" class="form-select" required>
+            <option value="">— select event —</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-primary w-100">View</button>
+        </div>
+        <div class="col-md-1" th:if="${selectedInstanceId != null}">
+          <a th:href="@{/rankings}" class="btn btn-outline-secondary w-100" title="Clear">✕</a>
+        </div>
+      </form>
     </div>
-    <div class="col-auto">
-      <button type="submit" class="btn btn-outline-light btn-sm">Filter</button>
-    </div>
-    <div class="col-auto" th:if="${selectedCategory != null}">
-      <a th:href="@{/rankings}" class="btn btn-outline-secondary btn-sm">Clear</a>
-    </div>
-  </form>
-
-  <div th:if="${entries.empty}" class="text-muted">
-    No ranking entries found<span th:if="${selectedCategory != null}">
-      for category "<span th:text="${selectedCategory}"></span>"</span>.
   </div>
 
-  <div th:unless="${entries.empty}" class="table-responsive">
-    <table class="table table-dark table-striped table-hover align-middle">
-      <thead>
-        <tr>
-          <th>#</th>
-          <th>Rank</th>
-          <th>Player</th>
-          <th>Alliance</th>
-          <th class="text-end">Power</th>
-          <th class="text-end">Kills</th>
-          <th>Category</th>
-          <th>Submitted By</th>
-          <th>Captured At</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr th:each="e, stat : ${entries}">
-          <td th:text="${stat.index + 1}" class="text-muted small"></td>
-          <td th:text="${e.rank}">–</td>
-          <td th:text="${e.playerName}">–</td>
-          <td th:text="${e.allianceTag}">–</td>
-          <td th:text="${e.power}" class="text-end font-monospace">–</td>
-          <td th:text="${e.kills}" class="text-end font-monospace">–</td>
-          <td><span class="badge bg-primary" th:text="${e.category}">–</span></td>
-          <td th:text="${e.submittedBy}">–</td>
-          <td th:text="${e.capturedAt}" class="small text-muted">–</td>
-        </tr>
-      </tbody>
-    </table>
+  <!-- ── No event selected ───────────────────────────────────────────────── -->
+  <div th:if="${selectedInstanceId == null}" class="text-light text-center py-5">
+    <p class="fs-5">Select a category and event to view the combined ranking.</p>
+  </div>
+
+  <!-- ── Event ranking ───────────────────────────────────────────────────── -->
+  <div th:if="${selectedInstance != null}">
+    <div class="d-flex align-items-baseline gap-3 mb-1">
+      <h4 class="mb-0" th:text="${selectedInstance.displayName}"></h4>
+      <span class="badge bg-info" th:text="${photoCount + ' photo' + (photoCount == 1 ? '' : 's')}"></span>
+    </div>
+    <p class="text-light small mb-3">
+      Combined ranking from all approved and reviewed uploads for this event,
+      sorted by power descending.
+    </p>
+
+    <div th:if="${entries == null or entries.empty}" class="text-light">
+      No entries for this event yet. Upload and approve photos to populate this ranking.
+    </div>
+
+    <div th:unless="${entries == null or entries.empty}" class="table-responsive">
+      <table class="table table-dark table-striped table-hover align-middle">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Player</th>
+            <th>Alliance</th>
+            <th class="text-end">Power</th>
+            <th class="text-end">Kills</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr th:each="e, stat : ${entries}">
+            <td class="text-light fw-semibold" th:text="${stat.index + 1}"></td>
+            <td th:text="${e.playerName}">–</td>
+            <td><span th:if="${e.allianceTag != null}"
+                      class="badge bg-primary"
+                      th:text="${'[' + e.allianceTag + ']'}"></span></td>
+            <td class="text-end font-monospace"
+                th:text="${e.power != null ? #numbers.formatInteger(e.power, 1, 'COMMA') : '–'}"></td>
+            <td class="text-end font-monospace"
+                th:text="${e.kills != null ? #numbers.formatInteger(e.kills, 1, 'COMMA') : '–'}"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
+<script th:inline="javascript">
+const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
+const PRE_CAT  = /*[[${selectedCategoryId}]]*/ null;
+const PRE_INST = /*[[${selectedInstanceId}]]*/ null;
+</script>
+<script>
+(function () {
+  const catPicker  = document.getElementById('cat-picker');
+  const instPicker = document.getElementById('instanceId');
+
+  function populateInstances(catId) {
+    const matches = catId
+      ? CATEGORY_INSTANCES.filter(i => i.categoryId === catId)
+      : [];
+    instPicker.innerHTML = '<option value="">— select event —</option>';
+    matches.forEach(i => {
+      const opt = document.createElement('option');
+      opt.value       = i.id;
+      opt.textContent = i.label;
+      instPicker.appendChild(opt);
+    });
+    instPicker.disabled = matches.length === 0;
+  }
+
+  catPicker.addEventListener('change', function () {
+    populateInstances(parseInt(this.value, 10) || null);
+  });
+
+  // Pre-select when returning from a filtered view
+  if (PRE_CAT) {
+    catPicker.value = PRE_CAT;
+    populateInstances(PRE_CAT);
+    if (PRE_INST) instPicker.value = PRE_INST;
+  }
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

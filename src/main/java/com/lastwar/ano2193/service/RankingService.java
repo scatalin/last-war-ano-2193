@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -63,6 +64,11 @@ public class RankingService {
     public List<RankingEntry> findBySourcePhotoPath(String sourcePhotoPath) {
         log.debug("findBySourcePhotoPath sourcePhotoPath={}", sourcePhotoPath);
         return repository.findBySourcePhotoPath(sourcePhotoPath);
+    }
+
+    public List<RankingEntry> findBySourcePhotoPathIn(Collection<String> paths) {
+        log.debug("findBySourcePhotoPathIn count={}", paths.size());
+        return repository.findBySourcePhotoPathIn(paths);
     }
 
     public void deleteBySourcePhotoPath(String sourcePhotoPath) {
