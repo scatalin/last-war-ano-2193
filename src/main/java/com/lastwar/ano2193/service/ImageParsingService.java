@@ -1,12 +1,10 @@
 package com.lastwar.ano2193.service;
 
 import com.lastwar.ano2193.model.RankingEntry;
-import net.sourceforge.tess4j.ITesseract;
-import net.sourceforge.tess4j.Tesseract;
-import net.sourceforge.tess4j.TesseractException;
+import com.lastwar.ano2193.ocr.OcrException;
+import com.lastwar.ano2193.ocr.OcrStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
@@ -32,22 +30,21 @@ public class ImageParsingService {
     private static final Pattern HEADER_LINE   = Pattern.compile(
         "(?i)^(rank(?:ing)?|commander|points?|mon\\.?|tue?s?\\.?|wed\\.?|thu?r?\\.?|fri\\.?|sat\\.?|sun\\.?|\\d+)$");
 
-    @Value("${ocr.tessdata-path:/usr/share/tesseract-ocr/5/tessdata}")
-    private String tessDataPath;
+    private final OcrStrategy ocrStrategy;
+
+    public ImageParsingService(OcrStrategy ocrStrategy) {
+        this.ocrStrategy = ocrStrategy;
+    }
 
     /**
-     * Runs Tesseract OCR on {@code imageFile} and returns the raw extracted text.
+     * Runs the configured OCR strategy on {@code imageFile} and returns the raw text.
      *
-     * @throws TesseractException if the OCR engine fails (e.g. missing tessdata)
+     * @throws OcrException if the underlying engine fails
      */
-    public String extractRawText(File imageFile) throws TesseractException {
-        log.info("OCR start: file='{}' size={}B", imageFile.getName(), imageFile.length());
-        ITesseract tesseract = new Tesseract();
-        tesseract.setDatapath(tessDataPath);
-        tesseract.setLanguage("eng");
-        tesseract.setOcrEngineMode(1);  // LSTM neural-net mode
-        tesseract.setPageSegMode(6);    // Assume a uniform block of text
-        String result = tesseract.doOCR(imageFile);
+    public String extractRawText(File imageFile) throws OcrException {
+        log.info("OCR start: strategy={} file='{}' size={}B",
+                ocrStrategy.name(), imageFile.getName(), imageFile.length());
+        String result = ocrStrategy.extractText(imageFile);
         boolean blank = result == null || result.isBlank();
         log.info("OCR end: file='{}' chars={} blank={}",
                 imageFile.getName(), result == null ? -1 : result.length(), blank);
@@ -66,7 +63,7 @@ public class ImageParsingService {
             String text = extractRawText(imageFile);
             log.debug("OCR raw output for '{}':\n{}", imageFile.getName(), text);
             return parseOcrText(text, category, submittedBy, imageFile.getName());
-        } catch (TesseractException e) {
+        } catch (OcrException e) {
             log.error("OCR failed for '{}': {}", imageFile.getName(), e.getMessage(), e);
             return Collections.emptyList();
         }

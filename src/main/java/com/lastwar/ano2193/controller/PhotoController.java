@@ -7,7 +7,7 @@ import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.ImageParsingService;
 import com.lastwar.ano2193.service.RankingService;
-import net.sourceforge.tess4j.TesseractException;
+import com.lastwar.ano2193.ocr.OcrException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -166,7 +166,7 @@ public class PhotoController {
                     entries = imageParsingService.parseOcrText(
                             rawOcrText, categoryName, userDetails.getUsername(), storedName);
                     log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
-                } catch (TesseractException e) {
+                } catch (OcrException e) {
                     ocrFailed = true;
                     log.warn("handleUpload: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
                             storedName, e.getMessage());
@@ -248,7 +248,7 @@ public class PhotoController {
                 entries = imageParsingService.parseOcrText(
                         rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
                 log.info("reparsePhoto: OCR complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());
-            } catch (TesseractException e) {
+            } catch (OcrException e) {
                 ocrFailed = true;
                 log.warn("reparsePhoto: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
                         upload.getFilename(), e.getMessage());
