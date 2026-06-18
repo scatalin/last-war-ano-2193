@@ -35,15 +35,25 @@ public class ImageParsingService {
     @Value("${ocr.tessdata-path:/usr/share/tesseract-ocr/5/tessdata}")
     private String tessDataPath;
 
+    /**
+     * Runs Tesseract OCR on {@code imageFile} and returns the raw extracted text.
+     *
+     * @throws TesseractException if the OCR engine fails (e.g. missing tessdata)
+     */
+    public String extractRawText(File imageFile) throws TesseractException {
+        log.debug("extractRawText: file='{}'", imageFile.getName());
+        ITesseract tesseract = new Tesseract();
+        tesseract.setDatapath(tessDataPath);
+        tesseract.setLanguage("eng");
+        tesseract.setOcrEngineMode(1);  // LSTM neural-net mode
+        tesseract.setPageSegMode(6);    // Assume a uniform block of text
+        return tesseract.doOCR(imageFile);
+    }
+
     public List<RankingEntry> parseImage(File imageFile, String category, String submittedBy) {
         log.info("Parsing image '{}' for category '{}'", imageFile.getName(), category);
         try {
-            ITesseract tesseract = new Tesseract();
-            tesseract.setDatapath(tessDataPath);
-            tesseract.setLanguage("eng");
-            tesseract.setOcrEngineMode(1);  // LSTM neural-net mode
-            tesseract.setPageSegMode(6);    // Assume a uniform block of text
-            String text = tesseract.doOCR(imageFile);
+            String text = extractRawText(imageFile);
             log.debug("OCR raw output for '{}':\n{}", imageFile.getName(), text);
             return parseOcrText(text, category, submittedBy, imageFile.getName());
         } catch (TesseractException e) {
