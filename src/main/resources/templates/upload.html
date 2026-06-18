@@ -160,17 +160,6 @@
                  data-tip="Download original image">
                 <i class="bi bi-download"></i>
               </a>
-              <!-- Re-parse -->
-              <form th:if="${u.filename != null}"
-                    th:action="@{/upload/reparse/{id}(id=${u.id})}"
-                    method="post" style="display:inline">
-                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-                <button type="submit"
-                        class="btn btn-sm btn-outline-warning icon-btn"
-                        data-tip="Re-run OCR and replace entries">
-                  <i class="bi bi-arrow-clockwise"></i>
-                </button>
-              </form>
               <!-- Re-map -->
               <form th:if="${u.rawOcrText != null and !#strings.isEmpty(u.rawOcrText)}"
                     th:action="@{/upload/remap/{id}(id=${u.id})}"
@@ -318,6 +307,14 @@
                       class="btn btn-sm btn-outline-warning icon-btn"
                       data-tip="Re-run OCR on the image and replace entries">
                 <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </form>
+            <form th:action="@{/upload/remap/{id}(id=${u.id})}" method="post" style="display:inline">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button type="submit"
+                      class="btn btn-sm btn-outline-info icon-btn"
+                      data-tip="Re-map stored OCR text into entries (no new OCR call)">
+                <i class="bi bi-diagram-3"></i>
               </button>
             </form>
             <button type="button"
