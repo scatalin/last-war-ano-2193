@@ -68,7 +68,18 @@
                                    (${u.status == 'FAILED'} ? 'text-danger' : 'text-warning')">
             </span>
           </td>
-          <td th:text="${u.notes}">–</td>
+          <td>
+            <!-- Clickable when PROCESSED: opens detail modal -->
+            <button th:if="${u.status == 'PROCESSED' and u.filename != null}"
+                    type="button"
+                    class="btn btn-link p-0 text-info text-decoration-none"
+                    data-bs-toggle="modal"
+                    th:data-bs-target="${'#details-' + u.id}"
+                    th:text="${u.notes ?: '–'}">
+            </button>
+            <span th:unless="${u.status == 'PROCESSED' and u.filename != null}"
+                  th:text="${u.notes}">–</span>
+          </td>
           <td class="d-flex gap-2">
             <a th:if="${u.filename != null}"
                th:href="@{/upload/file/{id}(id=${u.id})}"
@@ -84,6 +95,88 @@
       </tbody>
     </table>
   </div>
+
+  <!-- ── Detail modals (one per upload) ──────────────────────────────────── -->
+  <div th:each="u : ${uploads}"
+       th:if="${u.filename != null}"
+       th:id="${'details-' + u.id}"
+       class="modal fade" tabindex="-1"
+       th:aria-labelledby="${'details-label-' + u.id}" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content bg-dark text-light border-secondary">
+
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title" th:id="${'details-label-' + u.id}">
+            <span th:text="${u.originalFilename}"></span>
+            <small class="text-muted ms-2"
+                   th:text="${'— ' + u.category + ' — ' + u.uploadedAt}"></small>
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+          <div class="row g-3 mb-4">
+
+            <!-- Original image -->
+            <div class="col-md-5 text-center">
+              <p class="text-muted small mb-1">Original image</p>
+              <img th:src="@{/upload/image/{id}(id=${u.id})}"
+                   class="img-fluid rounded border border-secondary"
+                   th:alt="${u.originalFilename}"
+                   style="max-height:420px; object-fit:contain;">
+            </div>
+
+            <!-- Raw OCR output -->
+            <div class="col-md-7">
+              <p class="text-muted small mb-1">Raw OCR output</p>
+              <pre th:if="${u.rawOcrText != null}"
+                   class="bg-secondary rounded p-2 small mb-0"
+                   style="max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;"
+                   th:text="${u.rawOcrText}"></pre>
+              <p th:unless="${u.rawOcrText != null}"
+                 class="text-muted fst-italic small">
+                Not available — click Re-parse to generate.
+              </p>
+            </div>
+          </div>
+
+          <!-- Extracted entries -->
+          <h6 class="text-muted mb-2">Extracted entries</h6>
+          <div th:with="entries=${entriesByFilename[u.filename]}">
+            <p th:if="${entries == null or entries.empty}"
+               class="text-muted fst-italic small">No entries extracted for this upload.</p>
+            <div th:unless="${entries == null or entries.empty}" class="table-responsive">
+              <table class="table table-dark table-sm table-striped mb-0">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Player</th>
+                    <th>Alliance</th>
+                    <th>Points / Power</th>
+                    <th>Kills</th>
+                    <th>Captured at</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="e : ${entries}">
+                    <td th:text="${e.rank}">–</td>
+                    <td th:text="${e.playerName}">–</td>
+                    <td th:text="${e.allianceTag}">–</td>
+                    <td th:text="${e.power}">–</td>
+                    <td th:text="${e.kills}">–</td>
+                    <td th:text="${e.capturedAt}">–</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div><!-- /modal-body -->
+
+      </div>
+    </div>
+  </div>
+  <!-- ── End modals ───────────────────────────────────────────────────────── -->
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

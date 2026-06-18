@@ -13,6 +13,8 @@ public interface RankingEntryRepository extends JpaRepository<RankingEntry, Long
 
     List<RankingEntry> findByPlayerNameContainingIgnoreCase(String playerName);
 
+    List<RankingEntry> findBySourcePhotoPath(String sourcePhotoPath);
+
     @Transactional
     void deleteBySourcePhotoPath(String sourcePhotoPath);
 }

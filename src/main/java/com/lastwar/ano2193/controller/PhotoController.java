@@ -6,6 +6,7 @@ import com.lastwar.ano2193.repository.PhotoUploadRepository;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.ImageParsingService;
 import com.lastwar.ano2193.service.RankingService;
+import net.sourceforge.tess4j.TesseractException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -22,7 +23,6 @@ import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PathVariable;
 
 import java.io.File;
 import java.io.IOException;
@@ -31,7 +31,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -65,6 +68,15 @@ public class PhotoController {
         List<PhotoUpload> uploads = photoUploadRepository.findAll();
         log.trace("uploadForm: pastUploadCount={}", uploads.size());
         model.addAttribute("uploads", uploads);
+
+        Map<String, List<RankingEntry>> entriesByFilename = new HashMap<>();
+        for (PhotoUpload u : uploads) {
+            if (u.getFilename() != null) {
+                entriesByFilename.put(u.getFilename(),
+                        rankingService.findBySourcePhotoPath(u.getFilename()));
+            }
+        }
+        model.addAttribute("entriesByFilename", entriesByFilename);
         return "upload";
     }
 
@@ -99,20 +111,27 @@ public class PhotoController {
             Path dir = Paths.get(uploadDir);
             Files.createDirectories(dir);
 
-            // Use UUID to prevent path-traversal / filename collisions
             String ext = getExtension(file.getOriginalFilename());
             String storedName = UUID.randomUUID() + ext;
             Path target = dir.resolve(storedName);
             log.trace("handleUpload: storing file as target={}", target);
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-
             upload.setFilename(storedName);
 
-            File imageFile = target.toFile();
-            log.debug("handleUpload: invoking image parser for storedName={}", storedName);
-            List<RankingEntry> entries = imageParsingService.parseImage(
-                    imageFile, safeCategory, userDetails.getUsername());
+            String rawOcrText = null;
+            List<RankingEntry> entries = Collections.emptyList();
+            try {
+                log.debug("handleUpload: running OCR for storedName={}", storedName);
+                rawOcrText = imageParsingService.extractRawText(target.toFile());
+                log.debug("handleUpload: OCR raw output for '{}':\n{}", storedName, rawOcrText);
+                entries = imageParsingService.parseOcrText(
+                        rawOcrText, safeCategory, userDetails.getUsername(), storedName);
+            } catch (TesseractException e) {
+                log.warn("handleUpload: OCR unavailable for '{}': {}", storedName, e.getMessage());
+            }
             log.trace("handleUpload: parser returned {} entries", entries.size());
+
+            upload.setRawOcrText(rawOcrText);
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
@@ -148,9 +167,9 @@ public class PhotoController {
         }
 
         PhotoUpload upload = opt.get();
-        Path file = Paths.get(uploadDir).resolve(upload.getFilename()).normalize();
-        if (!file.toFile().exists()) {
-            log.debug("reparsePhoto: file missing path={}", file);
+        Path filePath = Paths.get(uploadDir).resolve(upload.getFilename()).normalize();
+        if (!filePath.toFile().exists()) {
+            log.debug("reparsePhoto: file missing path={}", filePath);
             redirectAttributes.addFlashAttribute("error", "Stored file not found on disk.");
             return "redirect:/upload";
         }
@@ -162,10 +181,20 @@ public class PhotoController {
             log.debug("reparsePhoto: deleting old entries for sourcePhotoPath={}", upload.getFilename());
             rankingService.deleteBySourcePhotoPath(upload.getFilename());
 
-            log.debug("reparsePhoto: invoking image parser for storedName={}", upload.getFilename());
-            List<RankingEntry> entries = imageParsingService.parseImage(
-                    file.toFile(), upload.getCategory(), userDetails.getUsername());
+            String rawOcrText = null;
+            List<RankingEntry> entries = Collections.emptyList();
+            try {
+                log.debug("reparsePhoto: running OCR for storedName={}", upload.getFilename());
+                rawOcrText = imageParsingService.extractRawText(filePath.toFile());
+                log.debug("reparsePhoto: OCR raw output for '{}':\n{}", upload.getFilename(), rawOcrText);
+                entries = imageParsingService.parseOcrText(
+                        rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
+            } catch (TesseractException e) {
+                log.warn("reparsePhoto: OCR unavailable for '{}': {}", upload.getFilename(), e.getMessage());
+            }
             log.trace("reparsePhoto: parser returned {} entries", entries.size());
+
+            upload.setRawOcrText(rawOcrText);
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
@@ -184,6 +213,27 @@ public class PhotoController {
             redirectAttributes.addFlashAttribute("error", "Re-parse failed: " + e.getMessage());
         }
         return "redirect:/upload";
+    }
+
+    @GetMapping("/image/{id}")
+    public ResponseEntity<Resource> viewImage(@PathVariable Long id) throws IOException {
+        log.debug("GET /upload/image/{}", id);
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(id);
+        if (opt.isEmpty() || opt.get().getFilename() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        PhotoUpload upload = opt.get();
+        Path file = Paths.get(uploadDir).resolve(upload.getFilename()).normalize();
+        Resource resource = new UrlResource(file.toUri());
+        if (!resource.exists() || !resource.isReadable()) {
+            return ResponseEntity.notFound().build();
+        }
+        String contentType = Files.probeContentType(file);
+        if (contentType == null) contentType = MediaType.IMAGE_PNG_VALUE;
+        // No Content-Disposition header → browser renders inline
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(resource);
     }
 
     @GetMapping("/file/{id}")

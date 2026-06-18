@@ -22,6 +22,10 @@ public class PhotoUpload {
 
     private String notes;
 
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String rawOcrText;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -45,4 +49,7 @@ public class PhotoUpload {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getRawOcrText() { return rawOcrText; }
+    public void setRawOcrText(String rawOcrText) { this.rawOcrText = rawOcrText; }
 }
