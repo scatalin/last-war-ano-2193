@@ -1,4 +1,5 @@
 services:
+
   app:
     build: .
     ports:
@@ -10,3 +11,37 @@ services:
       # Disable H2 console and reduce log verbosity in production
       SPRING_H2_CONSOLE_ENABLED: "false"
       LOGGING_LEVEL_COM_LASTWAR: "INFO"
+      # OCR strategy: tesseract | vision-llm | mock
+      OCR_STRATEGY: ${OCR_STRATEGY:-tesseract}
+      # Vision LLM — active when OCR_STRATEGY=vision-llm
+      OCR_VISION_BASE_URL: ${OCR_VISION_BASE_URL:-http://ollama:11434}
+      OCR_VISION_MODEL: ${OCR_VISION_MODEL:-llava:13b}
+      OCR_VISION_API_KEY: ${OCR_VISION_API_KEY:-}
+      OCR_VISION_TIMEOUT_SECONDS: ${OCR_VISION_TIMEOUT_SECONDS:-60}
+    depends_on:
+      ollama:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    # Uncomment to enable NVIDIA GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+volumes:
+  ollama-data:
