@@ -102,6 +102,7 @@ public class ImageParsingService {
         int autoRank = 1;
         String pendingPlayerName = null;
         Long pendingPoints = null;
+        RankingEntry lastEntry = null;
 
         for (String raw : rawLines) {
             String line = raw.trim();
@@ -138,15 +139,18 @@ public class ImageParsingService {
                 log.trace("parseOcrText: entry rank={} playerName={} tag={} power={}",
                         entry.getRank(), entry.getPlayerName(), entry.getAllianceTag(), entry.getPower());
                 entries.add(entry);
+                lastEntry = entry;
                 pendingPlayerName = null;
                 pendingPoints = null;
 
             } else {
                 // Non-tag line: either a player-name line or a points-bearing line.
-                // In game screenshots the rightmost column (points) appears on a separate
-                // OCR line from the alliance tag, so we split the two concerns:
-                //   - line with a large number  → capture as pendingPoints, keep existing name
-                //   - line without a large number → treat as player name
+                //
+                // Two layouts occur in practice:
+                //   Tesseract — points on the same line as [TAG], or on a separate line
+                //               BEFORE [TAG] → captured as pendingPoints
+                //   gpt-4o   — points on a separate line AFTER [TAG]; the most recent
+                //               entry has null power → assign directly to it
                 String clean = line;
                 Matcher leadRank = LEADING_RANK.matcher(clean);
                 if (leadRank.find()) clean = clean.substring(leadRank.end()).trim();
@@ -154,7 +158,11 @@ public class ImageParsingService {
                 if (!clean.isEmpty() && !clean.matches("\\d+")) {
                     Long linePoints = extractLastLargeNumber(clean);
                     if (linePoints != null) {
-                        pendingPoints = linePoints;
+                        if (lastEntry != null && lastEntry.getPower() == null) {
+                            lastEntry.setPower(linePoints);
+                        } else {
+                            pendingPoints = linePoints;
+                        }
                     } else {
                         pendingPlayerName = clean;
                     }

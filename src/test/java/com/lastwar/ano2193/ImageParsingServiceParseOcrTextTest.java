@@ -58,6 +58,33 @@ class ImageParsingServiceParseOcrTextTest {
     }
 
     /**
+     * gpt-4o returns each entry as four separate lines:
+     *   rank number, player name, alliance line, points
+     *
+     * Bug: points came AFTER the alliance line, so the old parser assigned them
+     * to the NEXT entry. This test pins the correct behaviour.
+     */
+    @Test
+    void parseOcrText_fourLineGptFormat_assignsPointsToCorrectEntry() {
+        String text = """
+                1
+                PHiLL
+                [ANO] A New Order
+                34,802,316
+                2
+                final day
+                [BEZT] BADAZZZEZ
+                32,284,398
+                """;
+
+        List<RankingEntry> entries = svc.parseOcrText(text, "points", "test-user", "test.png");
+
+        assertEquals(2, entries.size());
+        assertEntry(entries.get(0), 1, "PHiLL",     "ANO",  34_802_316L);
+        assertEntry(entries.get(1), 2, "final day", "BEZT", 32_284_398L);
+    }
+
+    /**
      * Simulates a compact vision-LLM response where each entry is a single line
      * prefixed with a rank number — a common LLaVA output style.
      *
