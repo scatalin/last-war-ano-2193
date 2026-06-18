@@ -21,6 +21,8 @@ public class PhotoUpload {
     /** PROCESSING | PRE_PARSED | REVIEW_REQUIRED | APPROVED | FAILED */
     private String status;
 
+    private String ocrStrategyName;
+
     private String notes;
 
     @Lob
@@ -53,6 +55,9 @@ public class PhotoUpload {
 
     public String getNotes() { return notes; }
     public void setNotes(String notes) { this.notes = notes; }
+
+    public String getOcrStrategyName() { return ocrStrategyName; }
+    public void setOcrStrategyName(String ocrStrategyName) { this.ocrStrategyName = ocrStrategyName; }
 
     public String getRawOcrText() { return rawOcrText; }
     public void setRawOcrText(String rawOcrText) { this.rawOcrText = rawOcrText; }

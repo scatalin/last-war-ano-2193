@@ -173,6 +173,7 @@ public class PhotoController {
                 }
 
                 upload.setRawOcrText(rawOcrText);
+                upload.setOcrStrategyName(imageParsingService.getStrategyName());
                 rankingService.saveAll(entries);
 
                 if (ocrFailed) {
@@ -255,6 +256,7 @@ public class PhotoController {
             }
 
             upload.setRawOcrText(rawOcrText);
+            upload.setOcrStrategyName(imageParsingService.getStrategyName());
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 

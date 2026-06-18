@@ -36,6 +36,10 @@ public class ImageParsingService {
         this.ocrStrategy = ocrStrategy;
     }
 
+    public String getStrategyName() {
+        return ocrStrategy.name();
+    }
+
     /**
      * Runs the configured OCR strategy on {@code imageFile} and returns the raw text.
      *

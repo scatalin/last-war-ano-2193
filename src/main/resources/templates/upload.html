@@ -217,7 +217,15 @@
             </div>
             <!-- Raw OCR output -->
             <div class="col-md-7">
-              <p class="text-light small mb-1">Raw OCR output</p>
+              <div class="d-flex align-items-center gap-2 mb-1">
+                <p class="text-light small mb-0">Raw OCR output</p>
+                <span th:if="${u.ocrStrategyName != null}"
+                      class="badge bg-secondary font-monospace"
+                      th:text="${u.ocrStrategyName}"
+                      title="OCR strategy used for this upload"></span>
+                <span th:unless="${u.ocrStrategyName != null}"
+                      class="badge bg-secondary text-muted">unknown strategy</span>
+              </div>
               <pre th:if="${u.rawOcrText != null}"
                    class="bg-secondary rounded p-2 small mb-0"
                    style="max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;"
