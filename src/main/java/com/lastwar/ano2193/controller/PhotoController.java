@@ -17,6 +17,13 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,6 +32,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Controller
@@ -123,6 +131,31 @@ public class PhotoController {
             redirectAttributes.addFlashAttribute("error", "Upload failed: " + e.getMessage());
         }
         return "redirect:/upload";
+    }
+
+    @GetMapping("/file/{id}")
+    public ResponseEntity<Resource> downloadFile(@PathVariable Long id) throws IOException {
+        log.debug("GET /upload/file/{}", id);
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(id);
+        if (opt.isEmpty() || opt.get().getFilename() == null) {
+            log.debug("downloadFile: id={} not found or has no stored file", id);
+            return ResponseEntity.notFound().build();
+        }
+        PhotoUpload upload = opt.get();
+        Path file = Paths.get(uploadDir).resolve(upload.getFilename()).normalize();
+        log.trace("downloadFile: id={} storedPath={} originalFilename={}", id, file, upload.getOriginalFilename());
+        Resource resource = new UrlResource(file.toUri());
+        if (!resource.exists() || !resource.isReadable()) {
+            log.debug("downloadFile: file missing or unreadable path={}", file);
+            return ResponseEntity.notFound().build();
+        }
+        String contentType = Files.probeContentType(file);
+        if (contentType == null) contentType = MediaType.APPLICATION_OCTET_STREAM_VALUE;
+        String disposition = "attachment; filename=\"" + upload.getOriginalFilename().replace("\"", "_") + "\"";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+                .body(resource);
     }
 
     /** Allowed image file extensions (lower-case, including the dot). */
