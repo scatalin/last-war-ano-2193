@@ -7,12 +7,17 @@ import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.RankingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -21,6 +26,9 @@ import java.util.*;
 public class RankingEntryApiController {
 
     private static final Logger log = LoggerFactory.getLogger(RankingEntryApiController.class);
+
+    @Value("${app.upload.dir:./uploads}")
+    private String uploadDir;
 
     private final RankingService rankingService;
     private final PhotoUploadRepository photoUploadRepository;
@@ -95,6 +103,29 @@ public class RankingEntryApiController {
         rankingService.delete(id);
         csvService.exportRankingsToCsv();
         log.debug("deleteEntry: id={} deleted", id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/photos/{photoId}")
+    public ResponseEntity<Void> deletePhoto(@PathVariable Long photoId) {
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(photoId);
+        if (opt.isEmpty()) {
+            log.debug("deletePhoto: photoId={} not found", photoId);
+            return ResponseEntity.notFound().build();
+        }
+        PhotoUpload photo = opt.get();
+        if (photo.getFilename() != null) {
+            rankingService.deleteBySourcePhotoPath(photo.getFilename());
+            try {
+                Path file = Paths.get(uploadDir).resolve(photo.getFilename()).normalize();
+                Files.deleteIfExists(file);
+            } catch (IOException e) {
+                log.warn("deletePhoto: could not delete file for photoId={}: {}", photoId, e.getMessage());
+            }
+        }
+        photoUploadRepository.delete(photo);
+        csvService.exportRankingsToCsv();
+        log.debug("deletePhoto: photoId={} deleted", photoId);
         return ResponseEntity.noContent().build();
     }
 

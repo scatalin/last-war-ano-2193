@@ -8,41 +8,60 @@
   <title>Upload Photo – Last War ANO 2193</title>
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <link rel="stylesheet" th:href="@{/css/main.css}">
   <style>
-    /* Editable cells */
+    /* ── Icon-only buttons ─────────────────────────────── */
+    .icon-btn {
+      width: 32px; height: 32px; padding: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ── Editable table cells ──────────────────────────── */
     td[contenteditable="true"] {
       outline: none;
-      border-bottom: 1px dashed rgba(255,255,255,0.25);
+      border-bottom: 1px dashed rgba(255,255,255,0.2);
       min-width: 2em;
       cursor: text;
       white-space: nowrap;
     }
     td[contenteditable="true"]:focus {
       border-bottom: 1px solid #0dcaf0;
-      background: rgba(13,202,240,0.08);
-    }
-    td[contenteditable="true"].ce-saving {
-      opacity: 0.6;
+      background: rgba(13,202,240,0.07);
     }
     @keyframes flashSaved {
-      0%   { background: rgba(25,135,84,0.45); }
+      0%   { background: rgba(25,135,84,0.4); }
       100% { background: transparent; }
     }
     @keyframes flashError {
-      0%   { background: rgba(220,53,69,0.45); }
+      0%   { background: rgba(220,53,69,0.4); }
       100% { background: transparent; }
     }
-    td[contenteditable="true"].ce-saved {
-      animation: flashSaved 0.7s ease-out forwards;
-    }
-    td[contenteditable="true"].ce-error {
-      animation: flashError 0.7s ease-out forwards;
+    td.ce-saved { animation: flashSaved 0.7s ease-out forwards; }
+    td.ce-error { animation: flashError 0.7s ease-out forwards; }
+
+    /* ── Custom tooltip ────────────────────────────────── */
+    #custom-tip {
+      position: fixed;
+      background: #1c1c2e;
+      color: #d0d0e8;
+      border: 1px solid #444;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 12px;
+      pointer-events: none;
+      z-index: 10000;
+      display: none;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
     }
   </style>
 </head>
 <body class="bg-dark text-light">
 
+<div id="custom-tip"></div>
 <div th:replace="~{fragments/nav :: navbar}"></div>
 
 <div class="container mt-4">
@@ -51,6 +70,7 @@
   <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
   <div th:if="${error}"   class="alert alert-danger"  th:text="${error}"></div>
 
+  <!-- ── Upload form ────────────────────────────────────── -->
   <div class="card bg-secondary mb-4">
     <div class="card-header">New Upload</div>
     <div class="card-body">
@@ -68,12 +88,14 @@
             The category is used to group and filter entries in the Rankings view.
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">Upload &amp; Process</button>
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-cloud-upload me-1"></i>Upload &amp; Process
+        </button>
       </form>
     </div>
   </div>
 
-  <!-- Upload history table -->
+  <!-- ── Upload history table ───────────────────────────── -->
   <h4 class="mb-3">Upload History</h4>
   <div th:if="${uploads.empty}" class="text-muted">No uploads yet.</div>
   <div th:unless="${uploads.empty}" class="table-responsive">
@@ -90,7 +112,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr th:each="u : ${uploads}">
+        <tr th:each="u : ${uploads}" th:data-upload-id="${u.id}">
           <td th:text="${u.originalFilename}">–</td>
           <td th:text="${u.category}">–</td>
           <td th:text="${u.uploadedBy}">–</td>
@@ -98,44 +120,60 @@
           <td>
             <span th:id="'status-badge-' + ${u.id}"
                   th:text="${u.status}"
-                  th:class="${u.status == 'APPROVED'}    ? 'text-success fw-semibold' :
-                             (${u.status == 'FAILED'}    ? 'text-danger fw-semibold'  :
-                             (${u.status == 'PRE_PARSED'}? 'text-info fw-semibold'    :
-                             (${u.status == 'REVIEW_REQUIRED'} ? 'text-warning fw-semibold' :
+                  th:class="${u.status == 'APPROVED'}         ? 'text-success fw-semibold' :
+                             (${u.status == 'FAILED'}         ? 'text-danger  fw-semibold' :
+                             (${u.status == 'PRE_PARSED'}     ? 'text-info    fw-semibold' :
+                             (${u.status == 'REVIEW_REQUIRED'}? 'text-warning fw-semibold' :
                               'text-warning fw-semibold')))">
             </span>
           </td>
+          <td class="text-muted small" th:text="${u.notes}">–</td>
           <td>
-            <!-- Clickable notes button for any reviewable status -->
-            <button th:if="${u.filename != null and u.status != 'PROCESSING' and u.status != 'FAILED'}"
-                    type="button"
-                    class="btn btn-link p-0 text-decoration-none"
-                    th:classappend="${u.status == 'APPROVED'}        ? ' text-success' :
-                                    (${u.status == 'REVIEW_REQUIRED'}? ' text-warning' : ' text-info')"
-                    data-bs-toggle="modal"
-                    th:data-bs-target="${'#details-' + u.id}"
-                    th:text="${u.notes ?: 'View / edit entries'}">
-            </button>
-            <span th:unless="${u.filename != null and u.status != 'PROCESSING' and u.status != 'FAILED'}"
-                  th:text="${u.notes}">–</span>
-          </td>
-          <td class="d-flex gap-2">
-            <a th:if="${u.filename != null}"
-               th:href="@{/upload/file/{id}(id=${u.id})}"
-               class="btn btn-sm btn-outline-light">Download</a>
-            <form th:if="${u.filename != null}"
-                  th:action="@{/upload/reparse/{id}(id=${u.id})}"
-                  method="post" style="display:inline">
-              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-              <button type="submit" class="btn btn-sm btn-outline-warning">Re-parse</button>
-            </form>
+            <div class="d-flex gap-1">
+              <!-- Review / edit entries -->
+              <button th:if="${u.filename != null and u.status != 'PROCESSING' and u.status != 'FAILED'}"
+                      type="button"
+                      class="btn btn-sm btn-outline-info icon-btn"
+                      data-bs-toggle="modal"
+                      th:data-bs-target="${'#details-' + u.id}"
+                      data-tip="Review / edit entries">
+                <i class="bi bi-pencil-square"></i>
+              </button>
+              <!-- Download -->
+              <a th:if="${u.filename != null}"
+                 th:href="@{/upload/file/{id}(id=${u.id})}"
+                 class="btn btn-sm btn-outline-light icon-btn"
+                 data-tip="Download original image">
+                <i class="bi bi-download"></i>
+              </a>
+              <!-- Re-parse -->
+              <form th:if="${u.filename != null}"
+                    th:action="@{/upload/reparse/{id}(id=${u.id})}"
+                    method="post" style="display:inline">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button type="submit"
+                        class="btn btn-sm btn-outline-warning icon-btn"
+                        data-tip="Re-run OCR and replace entries">
+                  <i class="bi bi-arrow-clockwise"></i>
+                </button>
+              </form>
+              <!-- Delete upload -->
+              <button th:if="${u.filename != null}"
+                      type="button"
+                      class="btn btn-sm btn-outline-danger icon-btn"
+                      th:data-photo-id="${u.id}"
+                      data-tip="Delete upload and all its entries"
+                      onclick="deleteUpload(this)">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
           </td>
         </tr>
       </tbody>
     </table>
   </div>
 
-  <!-- ── Detail / review modals (one per upload) ──────────────────────────── -->
+  <!-- ── Review modals (one per upload) ─────────────────── -->
   <div th:each="u : ${uploads}"
        th:if="${u.filename != null}"
        th:id="${'details-' + u.id}"
@@ -155,7 +193,6 @@
 
         <div class="modal-body">
           <div class="row g-3 mb-4">
-
             <!-- Original image -->
             <div class="col-md-5 text-center">
               <p class="text-muted small mb-1">Original image</p>
@@ -164,7 +201,6 @@
                    th:alt="${u.originalFilename}"
                    style="max-height:420px; object-fit:contain;">
             </div>
-
             <!-- Raw OCR output -->
             <div class="col-md-7">
               <p class="text-muted small mb-1">Raw OCR output</p>
@@ -172,8 +208,7 @@
                    class="bg-secondary rounded p-2 small mb-0"
                    style="max-height:420px; overflow-y:auto; white-space:pre-wrap; word-break:break-word;"
                    th:text="${u.rawOcrText}"></pre>
-              <p th:unless="${u.rawOcrText != null}"
-                 class="text-muted fst-italic small">
+              <p th:unless="${u.rawOcrText != null}" class="text-muted fst-italic small">
                 Not available — click Re-parse to generate.
               </p>
             </div>
@@ -182,7 +217,7 @@
           <!-- Editable entries table -->
           <div class="d-flex align-items-center mb-2 gap-2">
             <h6 class="text-muted mb-0">Extracted entries</h6>
-            <small class="text-muted fst-italic">— click any cell to edit, changes save automatically</small>
+            <small class="text-muted fst-italic">— click any cell to edit, saves automatically</small>
           </div>
           <div th:with="entries=${entriesByFilename[u.filename]}" class="table-responsive">
             <table class="table table-dark table-sm table-striped mb-0">
@@ -200,25 +235,23 @@
               <tbody th:id="${'entries-tbody-' + u.id}">
                 <tr th:if="${entries == null or entries.empty}">
                   <td colspan="7" class="text-muted fst-italic text-center">
-                    No entries extracted — add rows manually below.
+                    No entries — add rows manually below.
                   </td>
                 </tr>
                 <tr th:each="e : ${entries}" th:data-entry-id="${e.id}">
-                  <td contenteditable="true" data-field="rank"
-                      th:text="${e.rank ?: ''}"></td>
-                  <td contenteditable="true" data-field="playerName"
-                      th:text="${e.playerName ?: ''}"></td>
-                  <td contenteditable="true" data-field="allianceTag"
-                      th:text="${e.allianceTag ?: ''}"></td>
-                  <td contenteditable="true" data-field="power"
-                      th:text="${e.power ?: ''}"></td>
-                  <td contenteditable="true" data-field="kills"
-                      th:text="${e.kills ?: ''}"></td>
+                  <td contenteditable="true" data-field="rank"        th:text="${e.rank ?: ''}"></td>
+                  <td contenteditable="true" data-field="playerName"  th:text="${e.playerName ?: ''}"></td>
+                  <td contenteditable="true" data-field="allianceTag" th:text="${e.allianceTag ?: ''}"></td>
+                  <td contenteditable="true" data-field="power"       th:text="${e.power ?: ''}"></td>
+                  <td contenteditable="true" data-field="kills"       th:text="${e.kills ?: ''}"></td>
                   <td class="text-muted small" th:text="${e.capturedAt}">–</td>
                   <td>
                     <button type="button"
-                            class="btn btn-sm btn-outline-danger py-0 px-1"
-                            onclick="deleteEntry(this)">✕</button>
+                            class="btn btn-sm btn-outline-danger icon-btn"
+                            data-tip="Delete this entry"
+                            onclick="deleteEntry(this)">
+                      <i class="bi bi-trash"></i>
+                    </button>
                   </td>
                 </tr>
               </tbody>
@@ -229,8 +262,9 @@
                             class="btn btn-sm btn-outline-info"
                             th:data-photo-id="${u.id}"
                             th:data-tbody-id="${'entries-tbody-' + u.id}"
+                            data-tip="Add a new entry manually"
                             onclick="addEntry(this)">
-                      + Add row
+                      <i class="bi bi-plus-lg me-1"></i>Add row
                     </button>
                   </td>
                 </tr>
@@ -240,82 +274,143 @@
         </div><!-- /modal-body -->
 
         <div class="modal-footer border-secondary justify-content-between">
-          <div th:id="${'approve-msg-' + u.id}" class="small text-muted"></div>
+          <!-- Left: file actions -->
+          <div class="d-flex gap-2 align-items-center">
+            <a th:href="@{/upload/file/{id}(id=${u.id})}"
+               class="btn btn-sm btn-outline-light icon-btn"
+               data-tip="Download original image">
+              <i class="bi bi-download"></i>
+            </a>
+            <form th:action="@{/upload/reparse/{id}(id=${u.id})}" method="post" style="display:inline">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button type="submit"
+                      class="btn btn-sm btn-outline-warning icon-btn"
+                      data-tip="Re-run OCR and replace entries">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+            </form>
+            <button type="button"
+                    class="btn btn-sm btn-outline-danger icon-btn"
+                    th:data-photo-id="${u.id}"
+                    data-tip="Delete upload and all its entries"
+                    onclick="deleteUpload(this)">
+              <i class="bi bi-trash3"></i>
+            </button>
+            <span th:id="${'approve-msg-' + u.id}" class="small text-muted ms-1"></span>
+          </div>
+          <!-- Right: review actions -->
           <div class="d-flex gap-2">
             <button type="button"
-                    class="btn btn-success"
+                    class="btn btn-sm btn-success"
                     th:data-photo-id="${u.id}"
+                    data-tip="Mark all entries as reviewed and final"
                     onclick="approveReview(this)">
-              ✓ Approve Review
+              <i class="bi bi-check-circle-fill me-1"></i>Approve Review
             </button>
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button"
+                    class="btn btn-sm btn-secondary icon-btn"
+                    data-bs-dismiss="modal"
+                    data-tip="Close">
+              <i class="bi bi-x-lg"></i>
+            </button>
           </div>
         </div>
 
       </div>
     </div>
   </div>
-  <!-- ── End modals ───────────────────────────────────────────────────────── -->
+  <!-- ── End modals ─────────────────────────────────────── -->
 
-</div>
+</div><!-- /container -->
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function () {
+  /* ── CSRF ─────────────────────────────────────────────── */
   const csrf       = document.querySelector('meta[name="_csrf"]')?.content;
   const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
 
-  function apiHeaders() {
-    return { 'Content-Type': 'application/json', [csrfHeader]: csrf };
-  }
-  function noBodyHeaders() {
-    return { [csrfHeader]: csrf };
-  }
+  function apiHeaders()    { return { 'Content-Type': 'application/json', [csrfHeader]: csrf }; }
+  function deleteHeaders() { return { [csrfHeader]: csrf }; }
 
-  /* ── collect all editable fields from a row ── */
+  /* ── Custom 1-second tooltip ──────────────────────────── */
+  const tipEl  = document.getElementById('custom-tip');
+  let tipTimer = null;
+  let mouseX   = 0;
+  let mouseY   = 0;
+  let lastTip  = null;
+
+  document.addEventListener('mousemove', function (e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
+    if (tipEl.style.display !== 'none') {
+      tipEl.style.left = (mouseX + 14) + 'px';
+      tipEl.style.top  = (mouseY + 14) + 'px';
+    }
+  });
+
+  document.addEventListener('mouseover', function (e) {
+    const target = e.target.closest('[data-tip]');
+    if (target === lastTip) return;
+    clearTimeout(tipTimer);
+    tipEl.style.display = 'none';
+    lastTip = target;
+    if (!target) return;
+    tipTimer = setTimeout(function () {
+      tipEl.textContent    = target.dataset.tip;
+      tipEl.style.left     = (mouseX + 14) + 'px';
+      tipEl.style.top      = (mouseY + 14) + 'px';
+      tipEl.style.display  = 'block';
+    }, 1000);
+  });
+
+  document.addEventListener('mouseout', function (e) {
+    if (e.target.closest('[data-tip]') === lastTip && lastTip) {
+      clearTimeout(tipTimer);
+      tipEl.style.display = 'none';
+      lastTip = null;
+    }
+  });
+
+  /* ── Inline entry editing ─────────────────────────────── */
   function collectRow(row) {
     return {
-      rank:        toInt(cellText(row, 'rank')),
-      playerName:  toStr(cellText(row, 'playerName')),
-      allianceTag: toStr(cellText(row, 'allianceTag')),
-      power:       toLong(cellText(row, 'power')),
-      kills:       toLong(cellText(row, 'kills'))
+      rank:        toInt( cell(row, 'rank') ),
+      playerName:  toStr( cell(row, 'playerName') ),
+      allianceTag: toStr( cell(row, 'allianceTag') ),
+      power:       toLong( cell(row, 'power') ),
+      kills:       toLong( cell(row, 'kills') )
     };
   }
-  function cellText(row, field) {
-    return row.querySelector(`[data-field="${field}"]`)?.textContent ?? '';
+  function cell(row, field) {
+    return row.querySelector('[data-field="' + field + '"]')?.textContent ?? '';
   }
   function toInt(s)  { const n = parseInt(s.trim()); return isNaN(n) ? null : n; }
   function toLong(s) { const n = parseInt(s.replace(/[^0-9]/g, '')); return isNaN(n) ? null : n; }
   function toStr(s)  { const t = s.trim(); return t || null; }
 
-  /* ── auto-save on focusout (bubbles, unlike blur) ── */
+  /* auto-save on focusout */
   document.addEventListener('focusout', function (e) {
-    const cell = e.target.closest('td[data-field]');
-    if (!cell) return;
-    const row = cell.closest('tr[data-entry-id]');
+    const td = e.target.closest('td[data-field]');
+    if (!td) return;
+    const row = td.closest('tr[data-entry-id]');
     if (!row) return;
-
     const id   = row.dataset.entryId;
     const data = collectRow(row);
-
-    cell.classList.add('ce-saving');
-    fetch(`/api/entries/${id}`, {
-      method:  'PATCH',
-      headers: apiHeaders(),
-      body:    JSON.stringify(data)
-    }).then(r => {
-      cell.classList.remove('ce-saving');
-      cell.classList.add(r.ok ? 'ce-saved' : 'ce-error');
-      setTimeout(() => cell.classList.remove('ce-saved', 'ce-error'), 800);
-    }).catch(() => {
-      cell.classList.remove('ce-saving');
-      cell.classList.add('ce-error');
-      setTimeout(() => cell.classList.remove('ce-error'), 800);
+    td.classList.remove('ce-saved', 'ce-error');
+    fetch('/api/entries/' + id, {
+      method: 'PATCH', headers: apiHeaders(), body: JSON.stringify(data)
+    }).then(function (r) {
+      void r; // response acknowledged
+      td.classList.add(r.ok ? 'ce-saved' : 'ce-error');
+      setTimeout(function () { td.classList.remove('ce-saved', 'ce-error'); }, 800);
+    }).catch(function () {
+      td.classList.add('ce-error');
+      setTimeout(function () { td.classList.remove('ce-error'); }, 800);
     });
   });
 
-  /* ── Enter key saves (blurs) instead of inserting newline ── */
+  /* Enter key saves instead of inserting newline */
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Enter' && e.target.closest('td[data-field]')) {
       e.preventDefault();
@@ -323,76 +418,92 @@
     }
   });
 
-  /* ── build a new editable row from an entry object ── */
+  /* ── Build a new editable row from API response ───────── */
   function buildRow(entry) {
     const tr = document.createElement('tr');
     tr.dataset.entryId = entry.id;
     tr.innerHTML =
-      `<td contenteditable="true" data-field="rank">${entry.rank ?? ''}</td>` +
-      `<td contenteditable="true" data-field="playerName">${entry.playerName ?? ''}</td>` +
-      `<td contenteditable="true" data-field="allianceTag">${entry.allianceTag ?? ''}</td>` +
-      `<td contenteditable="true" data-field="power">${entry.power ?? ''}</td>` +
-      `<td contenteditable="true" data-field="kills">${entry.kills ?? ''}</td>` +
-      `<td class="text-muted small">${entry.capturedAt ?? ''}</td>` +
-      `<td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEntry(this)">✕</button></td>`;
+      '<td contenteditable="true" data-field="rank">'        + (entry.rank        ?? '') + '</td>' +
+      '<td contenteditable="true" data-field="playerName">'  + (entry.playerName  ?? '') + '</td>' +
+      '<td contenteditable="true" data-field="allianceTag">' + (entry.allianceTag ?? '') + '</td>' +
+      '<td contenteditable="true" data-field="power">'       + (entry.power       ?? '') + '</td>' +
+      '<td contenteditable="true" data-field="kills">'       + (entry.kills       ?? '') + '</td>' +
+      '<td class="text-muted small">'                        + (entry.capturedAt  ?? '') + '</td>' +
+      '<td><button type="button" class="btn btn-sm btn-outline-danger icon-btn"' +
+        ' data-tip="Delete this entry" onclick="deleteEntry(this)">' +
+        '<i class="bi bi-trash"></i></button></td>';
     return tr;
   }
 
-  /* ── add a new empty row ── */
+  /* ── Add row ──────────────────────────────────────────── */
   window.addEntry = function (btn) {
     const photoId = btn.dataset.photoId;
     const tbodyId = btn.dataset.tbodyId;
-    btn.disabled = true;
-    fetch(`/api/photos/${photoId}/entries`, {
-      method:  'POST',
-      headers: noBodyHeaders()
-    }).then(r => r.json()).then(entry => {
-      const tbody = document.getElementById(tbodyId);
-      // Remove the "no entries" placeholder row if present
-      const placeholder = tbody.querySelector('tr td[colspan]');
-      if (placeholder) placeholder.closest('tr').remove();
-      const row = buildRow(entry);
-      tbody.appendChild(row);
-      row.querySelector('[data-field="playerName"]').focus();
-    }).finally(() => { btn.disabled = false; });
+    btn.disabled  = true;
+    fetch('/api/photos/' + photoId + '/entries', {
+      method: 'POST', headers: deleteHeaders()
+    }).then(function (r) { return r.json(); })
+      .then(function (entry) {
+        const tbody       = document.getElementById(tbodyId);
+        const placeholder = tbody.querySelector('tr td[colspan]');
+        if (placeholder) placeholder.closest('tr').remove();
+        const row = buildRow(entry);
+        tbody.appendChild(row);
+        row.querySelector('[data-field="playerName"]').focus();
+      })
+      .finally(function () { btn.disabled = false; });
   };
 
-  /* ── delete a row ── */
+  /* ── Delete entry row ─────────────────────────────────── */
   window.deleteEntry = function (btn) {
     const row = btn.closest('tr');
     const id  = row.dataset.entryId;
     if (!confirm('Delete this entry?')) return;
-    fetch(`/api/entries/${id}`, {
-      method:  'DELETE',
-      headers: noBodyHeaders()
-    }).then(r => {
-      if (r.ok || r.status === 204) row.remove();
-    });
+    fetch('/api/entries/' + id, { method: 'DELETE', headers: deleteHeaders() })
+      .then(function (r) { if (r.ok || r.status === 204) row.remove(); });
   };
 
-  /* ── approve review ── */
+  /* ── Delete entire upload ─────────────────────────────── */
+  window.deleteUpload = function (btn) {
+    const photoId = btn.dataset.photoId;
+    if (!confirm('Delete this upload and all its entries? This cannot be undone.')) return;
+    btn.disabled = true;
+    fetch('/api/photos/' + photoId, { method: 'DELETE', headers: deleteHeaders() })
+      .then(function (r) {
+        if (r.ok || r.status === 204) {
+          const modalEl = document.getElementById('details-' + photoId);
+          if (modalEl) {
+            const inst = bootstrap.Modal.getInstance(modalEl);
+            if (inst) {
+              modalEl.addEventListener('hidden.bs.modal', function () { modalEl.remove(); }, { once: true });
+              inst.hide();
+            } else {
+              modalEl.remove();
+            }
+          }
+          const row = document.querySelector('tr[data-upload-id="' + photoId + '"]');
+          if (row) row.remove();
+        } else {
+          btn.disabled = false;
+        }
+      }).catch(function () { btn.disabled = false; });
+  };
+
+  /* ── Approve review ───────────────────────────────────── */
   window.approveReview = function (btn) {
     const photoId = btn.dataset.photoId;
-    btn.disabled = true;
-    fetch(`/api/photos/${photoId}/approve`, {
-      method:  'POST',
-      headers: noBodyHeaders()
-    }).then(r => r.json()).then(() => {
-      // Update status badge in history table
-      const badge = document.getElementById(`status-badge-${photoId}`);
-      if (badge) {
-        badge.textContent = 'APPROVED';
-        badge.className   = 'text-success fw-semibold';
-      }
-      // Update approve button
-      btn.textContent = '✓ Approved';
-      btn.classList.replace('btn-success', 'btn-outline-success');
-      // Show confirmation message in footer
-      const msg = document.getElementById(`approve-msg-${photoId}`);
-      if (msg) msg.textContent = 'Review approved — entries are now final.';
-    }).catch(() => {
-      btn.disabled = false;
-    });
+    btn.disabled  = true;
+    fetch('/api/photos/' + photoId + '/approve', { method: 'POST', headers: deleteHeaders() })
+      .then(function (r) { return r.json(); })
+      .then(function () {
+        const badge = document.getElementById('status-badge-' + photoId);
+        if (badge) { badge.textContent = 'APPROVED'; badge.className = 'text-success fw-semibold'; }
+        const msg = document.getElementById('approve-msg-' + photoId);
+        if (msg) msg.textContent = 'Entries marked as final.';
+        btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Approved';
+        btn.classList.replace('btn-success', 'btn-outline-success');
+      })
+      .catch(function () { btn.disabled = false; });
   };
 })();
 </script>
