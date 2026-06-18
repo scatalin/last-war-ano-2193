@@ -1,5 +1,7 @@
 package com.lastwar.ano2193.controller;
 
+import com.lastwar.ano2193.model.UploadCategory;
+import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.RankingService;
 import com.lastwar.ano2193.service.UserService;
@@ -22,12 +24,14 @@ public class AdminController {
     private final UserService userService;
     private final RankingService rankingService;
     private final CsvService csvService;
+    private final CategoryService categoryService;
 
     public AdminController(UserService userService, RankingService rankingService,
-                           CsvService csvService) {
+                           CsvService csvService, CategoryService categoryService) {
         this.userService = userService;
         this.rankingService = rankingService;
         this.csvService = csvService;
+        this.categoryService = categoryService;
     }
 
     @GetMapping
@@ -104,5 +108,67 @@ public class AdminController {
         csvService.exportRankingsToCsv();
         redirectAttributes.addFlashAttribute("success", "Data exported to CSV.");
         return "redirect:/admin/data";
+    }
+
+    // ─── Category management ──────────────────────────────────────────────────
+
+    @GetMapping("/categories")
+    public String categories(Model model) {
+        log.debug("GET /admin/categories");
+        model.addAttribute("categories", categoryService.findAll());
+        return "admin/categories";
+    }
+
+    @PostMapping("/categories/create")
+    public String createCategory(@RequestParam String name,
+                                 @RequestParam(required = false) String description,
+                                 RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/create name={}", name);
+        String safeName = name.trim().replaceAll("[^A-Za-z0-9_\\-]", "_");
+        if (safeName.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "Category name is required.");
+            return "redirect:/admin/categories";
+        }
+        if (categoryService.existsByName(safeName)) {
+            redirectAttributes.addFlashAttribute("error", "Category already exists: " + safeName);
+            return "redirect:/admin/categories";
+        }
+        UploadCategory c = new UploadCategory();
+        c.setName(safeName);
+        c.setDescription(description != null ? description.trim() : null);
+        categoryService.save(c);
+        redirectAttributes.addFlashAttribute("success", "Category created: " + safeName);
+        return "redirect:/admin/categories";
+    }
+
+    @PostMapping("/categories/edit/{id}")
+    public String editCategory(@PathVariable Long id,
+                               @RequestParam String name,
+                               @RequestParam(required = false) String description,
+                               RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/edit/{}", id);
+        return categoryService.findById(id).map(c -> {
+            String safeName = name.trim().replaceAll("[^A-Za-z0-9_\\-]", "_");
+            if (safeName.isEmpty()) {
+                redirectAttributes.addFlashAttribute("error", "Category name is required.");
+                return "redirect:/admin/categories";
+            }
+            c.setName(safeName);
+            c.setDescription(description != null ? description.trim() : null);
+            categoryService.save(c);
+            redirectAttributes.addFlashAttribute("success", "Category updated.");
+            return "redirect:/admin/categories";
+        }).orElseGet(() -> {
+            redirectAttributes.addFlashAttribute("error", "Category not found.");
+            return "redirect:/admin/categories";
+        });
+    }
+
+    @PostMapping("/categories/delete/{id}")
+    public String deleteCategory(@PathVariable Long id, RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/delete/{}", id);
+        categoryService.delete(id);
+        redirectAttributes.addFlashAttribute("success", "Category deleted.");
+        return "redirect:/admin/categories";
     }
 }

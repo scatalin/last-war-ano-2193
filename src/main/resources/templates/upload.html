@@ -86,10 +86,16 @@
         </div>
         <div class="mb-3">
           <label for="category" class="form-label">Ranking Category</label>
-          <input id="category" name="category" type="text" class="form-control"
-                 placeholder="e.g. kills, power, construction" required>
-          <div class="form-text text-muted">
-            The category is used to group and filter entries in the Rankings view.
+          <select id="category" name="category" class="form-select" required>
+            <option value="" disabled selected>— select a category —</option>
+            <option th:each="cat : ${categories}"
+                    th:value="${cat.name}"
+                    th:text="${cat.name + (cat.description != null ? ' — ' + cat.description : '')}">
+            </option>
+          </select>
+          <div class="form-text text-light">
+            Categories are managed by administrators under
+            <a th:href="@{/admin/categories}" class="text-info">Admin → Categories</a>.
           </div>
         </div>
         <button id="upload-btn" type="submit" class="btn btn-primary">

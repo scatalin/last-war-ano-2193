@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Category Management – Last War ANO 2193</title>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" th:href="@{/css/main.css}">
+</head>
+<body class="bg-dark text-light">
+
+<div th:replace="~{fragments/nav :: navbar}"></div>
+
+<div class="container mt-4">
+  <h2 class="mb-4">Category Management</h2>
+
+  <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
+  <div th:if="${error}"   class="alert alert-danger"  th:text="${error}"></div>
+
+  <!-- Create category form -->
+  <div class="card bg-secondary mb-4">
+    <div class="card-header">Add New Category</div>
+    <div class="card-body">
+      <form method="post" th:action="@{/admin/categories/create}" class="row g-2 align-items-end">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+        <div class="col-md-4">
+          <label class="form-label small">Name</label>
+          <input name="name" type="text" class="form-control"
+                 placeholder="e.g. kills" required>
+          <div class="form-text text-light">Letters, numbers, _ and - only.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small">Description</label>
+          <input name="description" type="text" class="form-control"
+                 placeholder="Short description shown to uploaders">
+        </div>
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-success w-100">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Categories table -->
+  <h4 class="mb-3">Existing Categories</h4>
+  <div th:if="${categories.empty}" class="text-light">No categories defined yet.</div>
+  <div th:unless="${categories.empty}" class="table-responsive">
+    <table class="table table-dark table-striped table-hover align-middle">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Description</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr th:each="c : ${categories}">
+          <td class="text-light small" th:text="${c.id}"></td>
+          <td class="fw-semibold" th:text="${c.name}"></td>
+          <td class="text-light" th:text="${c.description}">–</td>
+          <td>
+            <div class="d-flex gap-2">
+              <!-- Edit modal trigger -->
+              <button type="button" class="btn btn-outline-warning btn-sm"
+                      data-bs-toggle="modal"
+                      th:data-bs-target="${'#edit-modal-' + c.id}">
+                Edit
+              </button>
+              <!-- Delete -->
+              <form method="post"
+                    th:action="@{/admin/categories/delete/{id}(id=${c.id})}"
+                    onsubmit="return confirm('Delete category ' + /*[[${c.name}]]*/ '' + '?')">
+                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+              </form>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Edit modals (one per category) -->
+<div th:each="c : ${categories}">
+  <div class="modal fade" th:id="${'edit-modal-' + c.id}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content bg-dark text-light border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title">Edit Category</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form method="post" th:action="@{/admin/categories/edit/{id}(id=${c.id})}">
+          <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label class="form-label">Name</label>
+              <input name="name" type="text" class="form-control"
+                     th:value="${c.name}" required>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Description</label>
+              <input name="description" type="text" class="form-control"
+                     th:value="${c.description}">
+            </div>
+          </div>
+          <div class="modal-footer border-secondary">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-warning">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

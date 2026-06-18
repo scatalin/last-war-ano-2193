@@ -1,5 +1,6 @@
 package com.lastwar.ano2193.config;
 
+import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -9,7 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.Set;
 
 /**
- * Seeds default users on first startup.
+ * Seeds default users and categories on first startup.
  *
  * <p>Default accounts (change passwords in production!):
  * <ul>
@@ -24,9 +25,11 @@ public class DataInitializer implements CommandLineRunner {
     private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final UserService userService;
+    private final CategoryService categoryService;
 
-    public DataInitializer(UserService userService) {
+    public DataInitializer(UserService userService, CategoryService categoryService) {
         this.userService = userService;
+        this.categoryService = categoryService;
     }
 
     @Override
@@ -34,6 +37,12 @@ public class DataInitializer implements CommandLineRunner {
         createIfAbsent("admin",     "admin123",  Set.of("ADMIN", "SUBMITTER", "VIEWER"));
         createIfAbsent("submitter", "sub123",    Set.of("SUBMITTER", "VIEWER"));
         createIfAbsent("viewer",    "view123",   Set.of("VIEWER"));
+
+        categoryService.createIfAbsent("power",        "Total combat power ranking");
+        categoryService.createIfAbsent("kills",        "Total kills ranking");
+        categoryService.createIfAbsent("construction", "Construction speed / points ranking");
+        categoryService.createIfAbsent("daily",        "Daily ranking snapshot");
+        categoryService.createIfAbsent("weekly",       "Weekly ranking snapshot");
     }
 
     private void createIfAbsent(String username, String password, Set<String> roles) {

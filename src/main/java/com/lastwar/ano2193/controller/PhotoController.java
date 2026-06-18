@@ -3,6 +3,7 @@ package com.lastwar.ano2193.controller;
 import com.lastwar.ano2193.model.PhotoUpload;
 import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.repository.PhotoUploadRepository;
+import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.ImageParsingService;
 import com.lastwar.ano2193.service.RankingService;
@@ -52,15 +53,18 @@ public class PhotoController {
     private final RankingService rankingService;
     private final PhotoUploadRepository photoUploadRepository;
     private final CsvService csvService;
+    private final CategoryService categoryService;
 
     public PhotoController(ImageParsingService imageParsingService,
                            RankingService rankingService,
                            PhotoUploadRepository photoUploadRepository,
-                           CsvService csvService) {
+                           CsvService csvService,
+                           CategoryService categoryService) {
         this.imageParsingService = imageParsingService;
         this.rankingService = rankingService;
         this.photoUploadRepository = photoUploadRepository;
         this.csvService = csvService;
+        this.categoryService = categoryService;
     }
 
     @GetMapping
@@ -69,6 +73,7 @@ public class PhotoController {
         List<PhotoUpload> uploads = photoUploadRepository.findAll();
         log.trace("uploadForm: pastUploadCount={}", uploads.size());
         model.addAttribute("uploads", uploads);
+        model.addAttribute("categories", categoryService.findAll());
 
         Map<String, List<RankingEntry>> entriesByFilename = new HashMap<>();
         for (PhotoUpload u : uploads) {
