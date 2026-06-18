@@ -74,11 +74,15 @@
   <div class="card bg-secondary mb-4">
     <div class="card-header">New Upload</div>
     <div class="card-body">
-      <form method="post" th:action="@{/upload}" enctype="multipart/form-data">
+      <form id="upload-form" method="post" th:action="@{/upload}" enctype="multipart/form-data">
         <div class="mb-3">
-          <label for="file" class="form-label">Photo (PNG / JPG / WEBP)</label>
+          <label for="file" class="form-label">
+            Photos (PNG / JPG / WEBP)
+            <span id="file-count-badge" class="badge bg-info ms-2" style="display:none"></span>
+          </label>
           <input id="file" name="file" type="file" class="form-control"
-                 accept="image/*" required>
+                 accept="image/*" multiple required>
+          <div class="form-text text-muted">Select one or more images — they are processed sequentially.</div>
         </div>
         <div class="mb-3">
           <label for="category" class="form-label">Ranking Category</label>
@@ -88,7 +92,7 @@
             The category is used to group and filter entries in the Rankings view.
           </div>
         </div>
-        <button type="submit" class="btn btn-primary">
+        <button id="upload-btn" type="submit" class="btn btn-primary">
           <i class="bi bi-cloud-upload me-1"></i>Upload &amp; Process
         </button>
       </form>
@@ -326,6 +330,31 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 (function () {
+  /* ── Multi-file upload form ───────────────────────────── */
+  const fileInput  = document.getElementById('file');
+  const countBadge = document.getElementById('file-count-badge');
+  const uploadBtn  = document.getElementById('upload-btn');
+  const uploadForm = document.getElementById('upload-form');
+
+  fileInput?.addEventListener('change', function () {
+    const n = this.files.length;
+    if (n > 0) {
+      countBadge.textContent  = n + ' file' + (n === 1 ? '' : 's') + ' selected';
+      countBadge.style.display = '';
+    } else {
+      countBadge.style.display = 'none';
+    }
+  });
+
+  uploadForm?.addEventListener('submit', function () {
+    const n = fileInput.files.length;
+    if (n === 0) return;
+    uploadBtn.disabled    = true;
+    uploadBtn.innerHTML   =
+      '<span class="spinner-border spinner-border-sm me-1" role="status"></span>' +
+      'Uploading ' + n + ' file' + (n === 1 ? '' : 's') + '…';
+  });
+
   /* ── CSRF ─────────────────────────────────────────────── */
   const csrf       = document.querySelector('meta[name="_csrf"]')?.content;
   const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;

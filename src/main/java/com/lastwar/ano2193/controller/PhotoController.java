@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -82,78 +83,96 @@ public class PhotoController {
 
     @PostMapping
     public String handleUpload(
-            @RequestParam("file") MultipartFile file,
+            @RequestParam("file") List<MultipartFile> files,
             @RequestParam("category") String category,
             @AuthenticationPrincipal UserDetails userDetails,
             RedirectAttributes redirectAttributes) {
 
-        log.debug("POST /upload originalFilename={} category={} user={} size={}",
-                file.getOriginalFilename(), category, userDetails.getUsername(), file.getSize());
+        List<MultipartFile> nonEmpty = files.stream()
+                .filter(f -> !f.isEmpty()).toList();
+        log.info("POST /upload fileCount={} category={} user={}", nonEmpty.size(), category, userDetails.getUsername());
 
-        if (file.isEmpty()) {
-            log.debug("handleUpload: rejected – file is empty");
-            redirectAttributes.addFlashAttribute("error", "Please select a file to upload.");
+        if (nonEmpty.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "Please select at least one file to upload.");
             return "redirect:/upload";
         }
 
         String safeCategory = category.replaceAll("[^A-Za-z0-9_\\-]", "_");
-        log.trace("handleUpload: safeCategory={}", safeCategory);
-        PhotoUpload upload = new PhotoUpload();
-        upload.setOriginalFilename(file.getOriginalFilename());
-        upload.setCategory(safeCategory);
-        upload.setUploadedBy(userDetails.getUsername());
-        upload.setUploadedAt(LocalDateTime.now());
-        upload.setStatus("PROCESSING");
-        photoUploadRepository.save(upload);
-        log.trace("handleUpload: PhotoUpload saved with id={} status=PROCESSING", upload.getId());
+        Path dir = Paths.get(uploadDir);
 
-        try {
-            Path dir = Paths.get(uploadDir);
-            Files.createDirectories(dir);
+        int succeeded = 0, failedCount = 0, totalEntries = 0;
+        List<String> failedNames = new ArrayList<>();
 
-            String ext = getExtension(file.getOriginalFilename());
-            String storedName = UUID.randomUUID() + ext;
-            Path target = dir.resolve(storedName);
-            log.trace("handleUpload: storing file as target={}", target);
-            Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
-            upload.setFilename(storedName);
+        for (MultipartFile file : nonEmpty) {
+            String originalFilename = file.getOriginalFilename();
+            log.info("handleUpload: processing file='{}' size={}B", originalFilename, file.getSize());
 
-            String rawOcrText = null;
-            List<RankingEntry> entries = Collections.emptyList();
-            boolean ocrFailed = false;
+            PhotoUpload upload = new PhotoUpload();
+            upload.setOriginalFilename(originalFilename);
+            upload.setCategory(safeCategory);
+            upload.setUploadedBy(userDetails.getUsername());
+            upload.setUploadedAt(LocalDateTime.now());
+            upload.setStatus("PROCESSING");
+            photoUploadRepository.save(upload);
+
             try {
-                log.info("handleUpload: starting OCR for storedName={}", storedName);
-                rawOcrText = imageParsingService.extractRawText(target.toFile());
-                entries = imageParsingService.parseOcrText(
-                        rawOcrText, safeCategory, userDetails.getUsername(), storedName);
-                log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
-            } catch (TesseractException e) {
-                ocrFailed = true;
-                log.warn("handleUpload: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
-                        storedName, e.getMessage());
-            }
+                Files.createDirectories(dir);
 
-            upload.setRawOcrText(rawOcrText);
-            rankingService.saveAll(entries);
-            csvService.exportRankingsToCsv();
+                String ext = getExtension(originalFilename);
+                String storedName = UUID.randomUUID() + ext;
+                Path target = dir.resolve(storedName);
+                Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
+                upload.setFilename(storedName);
 
-            if (ocrFailed) {
+                String rawOcrText = null;
+                List<RankingEntry> entries = Collections.emptyList();
+                boolean ocrFailed = false;
+                try {
+                    log.info("handleUpload: starting OCR for storedName={}", storedName);
+                    rawOcrText = imageParsingService.extractRawText(target.toFile());
+                    entries = imageParsingService.parseOcrText(
+                            rawOcrText, safeCategory, userDetails.getUsername(), storedName);
+                    log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
+                } catch (TesseractException e) {
+                    ocrFailed = true;
+                    log.warn("handleUpload: OCR failed for '{}' — rawOcrText will be null on frontend. Cause: {}",
+                            storedName, e.getMessage());
+                }
+
+                upload.setRawOcrText(rawOcrText);
+                rankingService.saveAll(entries);
+
+                if (ocrFailed) {
+                    upload.setStatus("FAILED");
+                    upload.setNotes("OCR failed — re-parse or add entries manually");
+                } else {
+                    upload.setStatus("PRE_PARSED");
+                    upload.setNotes(entries.size() + " entries extracted");
+                    totalEntries += entries.size();
+                }
+                photoUploadRepository.save(upload);
+                succeeded++;
+
+            } catch (IOException e) {
+                log.error("handleUpload: IO error for file='{}'", originalFilename, e);
                 upload.setStatus("FAILED");
-                upload.setNotes("OCR failed — re-parse or add entries manually");
-            } else {
-                upload.setStatus("PRE_PARSED");
-                upload.setNotes(entries.size() + " entries extracted");
+                upload.setNotes(e.getMessage());
+                photoUploadRepository.save(upload);
+                failedCount++;
+                failedNames.add(originalFilename);
             }
-            photoUploadRepository.save(upload);
+        }
 
+        csvService.exportRankingsToCsv();
+        log.info("handleUpload: batch complete succeeded={} failed={} totalEntries={}", succeeded, failedCount, totalEntries);
+
+        if (succeeded > 0) {
             redirectAttributes.addFlashAttribute("success",
-                    "Upload complete. " + entries.size() + " entries extracted.");
-        } catch (IOException e) {
-            log.error("File upload error", e);
-            upload.setStatus("FAILED");
-            upload.setNotes(e.getMessage());
-            photoUploadRepository.save(upload);
-            redirectAttributes.addFlashAttribute("error", "Upload failed: " + e.getMessage());
+                    succeeded + " file(s) uploaded — " + totalEntries + " entries extracted.");
+        }
+        if (failedCount > 0) {
+            redirectAttributes.addFlashAttribute("error",
+                    failedCount + " file(s) failed: " + String.join(", ", failedNames));
         }
         return "redirect:/upload";
     }
