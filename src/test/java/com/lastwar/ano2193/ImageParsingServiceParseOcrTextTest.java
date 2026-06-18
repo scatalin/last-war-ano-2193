@@ -61,11 +61,11 @@ class ImageParsingServiceParseOcrTextTest {
      * gpt-4o returns each entry as four separate lines:
      *   rank number, player name, alliance line, points
      *
-     * Bug: points came AFTER the alliance line, so the old parser assigned them
-     * to the NEXT entry. This test pins the correct behaviour.
+     * Verifies both that points go to the correct entry (not shifted to the next)
+     * and that the rank number from the image is used rather than a sequential counter.
      */
     @Test
-    void parseOcrText_fourLineGptFormat_assignsPointsToCorrectEntry() {
+    void parseOcrText_fourLineGptFormat_mapsRankAndPoints() {
         String text = """
                 1
                 PHiLL
@@ -82,6 +82,35 @@ class ImageParsingServiceParseOcrTextTest {
         assertEquals(2, entries.size());
         assertEntry(entries.get(0), 1, "PHiLL",     "ANO",  34_802_316L);
         assertEntry(entries.get(1), 2, "final day", "BEZT", 32_284_398L);
+    }
+
+    /**
+     * Non-sequential rank (e.g. "Your Alliance" row at rank 23) must use the
+     * image rank, not a sequential counter that would give rank 3 here.
+     */
+    @Test
+    void parseOcrText_nonSequentialRank_usesImageRank() {
+        String text = """
+                1
+                buubeats
+                [ANO] A New Order
+                10,181,750
+                2
+                Jsu08
+                [ANO] A New Order
+                9,557,250
+                23
+                javalinho
+                [ANO] A New Order
+                8,139,500
+                """;
+
+        List<RankingEntry> entries = svc.parseOcrText(text, "points", "test-user", "test.png");
+
+        assertEquals(3, entries.size());
+        assertEntry(entries.get(0),  1, "buubeats",  "ANO", 10_181_750L);
+        assertEntry(entries.get(1),  2, "Jsu08",     "ANO",  9_557_250L);
+        assertEntry(entries.get(2), 23, "javalinho", "ANO",  8_139_500L);
     }
 
     /**

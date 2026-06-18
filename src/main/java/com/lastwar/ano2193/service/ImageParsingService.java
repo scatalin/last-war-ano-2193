@@ -100,12 +100,19 @@ public class ImageParsingService {
         log.trace("parseOcrText: rawLineCount={}", rawLines.length);
 
         int autoRank = 1;
+        Integer pendingRank = null;
         String pendingPlayerName = null;
         Long pendingPoints = null;
         RankingEntry lastEntry = null;
 
         for (String raw : rawLines) {
             String line = raw.trim();
+            // Standalone 1-3 digit number → rank position from the image (gpt-4o format).
+            // Must be checked before HEADER_LINE, which also matches \d+.
+            if (line.matches("\\d{1,3}")) {
+                pendingRank = Integer.parseInt(line);
+                continue;
+            }
             if (line.isEmpty() || HEADER_LINE.matcher(line).matches()) continue;
 
             log.trace("parseOcrText: line='{}'", line);
@@ -126,8 +133,11 @@ public class ImageParsingService {
                 // extracting from this line for simpler single-line input formats.
                 Long points = pendingPoints != null ? pendingPoints : extractLastLargeNumber(line);
 
+                int rank = pendingRank != null ? pendingRank : autoRank;
+                autoRank = rank + 1;
+
                 RankingEntry entry = new RankingEntry();
-                entry.setRank(autoRank++);
+                entry.setRank(rank);
                 entry.setCategory(category);
                 entry.setSubmittedBy(submittedBy);
                 entry.setSourcePhotoPath(sourcePhoto);
@@ -140,6 +150,7 @@ public class ImageParsingService {
                         entry.getRank(), entry.getPlayerName(), entry.getAllianceTag(), entry.getPower());
                 entries.add(entry);
                 lastEntry = entry;
+                pendingRank = null;
                 pendingPlayerName = null;
                 pendingPoints = null;
 
