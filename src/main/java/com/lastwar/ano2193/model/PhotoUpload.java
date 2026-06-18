@@ -17,7 +17,7 @@ public class PhotoUpload {
     private String uploadedBy;
     private LocalDateTime uploadedAt;
 
-    /** PENDING | PROCESSING | PROCESSED | FAILED */
+    /** PROCESSING | PRE_PARSED | REVIEW_REQUIRED | APPROVED | FAILED */
     private String status;
 
     private String notes;

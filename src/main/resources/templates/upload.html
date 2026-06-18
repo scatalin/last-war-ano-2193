@@ -3,10 +3,43 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="_csrf"        th:content="${_csrf.token}"/>
+  <meta name="_csrf_header" th:content="${_csrf.headerName}"/>
   <title>Upload Photo – Last War ANO 2193</title>
   <link rel="stylesheet"
         href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" th:href="@{/css/main.css}">
+  <style>
+    /* Editable cells */
+    td[contenteditable="true"] {
+      outline: none;
+      border-bottom: 1px dashed rgba(255,255,255,0.25);
+      min-width: 2em;
+      cursor: text;
+      white-space: nowrap;
+    }
+    td[contenteditable="true"]:focus {
+      border-bottom: 1px solid #0dcaf0;
+      background: rgba(13,202,240,0.08);
+    }
+    td[contenteditable="true"].ce-saving {
+      opacity: 0.6;
+    }
+    @keyframes flashSaved {
+      0%   { background: rgba(25,135,84,0.45); }
+      100% { background: transparent; }
+    }
+    @keyframes flashError {
+      0%   { background: rgba(220,53,69,0.45); }
+      100% { background: transparent; }
+    }
+    td[contenteditable="true"].ce-saved {
+      animation: flashSaved 0.7s ease-out forwards;
+    }
+    td[contenteditable="true"].ce-error {
+      animation: flashError 0.7s ease-out forwards;
+    }
+  </style>
 </head>
 <body class="bg-dark text-light">
 
@@ -52,7 +85,7 @@
           <th>Uploaded By</th>
           <th>Date</th>
           <th>Status</th>
-          <th>Notes</th>
+          <th>Entries</th>
           <th></th>
         </tr>
       </thead>
@@ -63,21 +96,27 @@
           <td th:text="${u.uploadedBy}">–</td>
           <td th:text="${u.uploadedAt}">–</td>
           <td>
-            <span th:text="${u.status}"
-                  th:classappend="${u.status == 'PROCESSED'} ? 'text-success' :
-                                   (${u.status == 'FAILED'} ? 'text-danger' : 'text-warning')">
+            <span th:id="'status-badge-' + ${u.id}"
+                  th:text="${u.status}"
+                  th:class="${u.status == 'APPROVED'}    ? 'text-success fw-semibold' :
+                             (${u.status == 'FAILED'}    ? 'text-danger fw-semibold'  :
+                             (${u.status == 'PRE_PARSED'}? 'text-info fw-semibold'    :
+                             (${u.status == 'REVIEW_REQUIRED'} ? 'text-warning fw-semibold' :
+                              'text-warning fw-semibold')))">
             </span>
           </td>
           <td>
-            <!-- Clickable when PROCESSED: opens detail modal -->
-            <button th:if="${u.status == 'PROCESSED' and u.filename != null}"
+            <!-- Clickable notes button for any reviewable status -->
+            <button th:if="${u.filename != null and u.status != 'PROCESSING' and u.status != 'FAILED'}"
                     type="button"
-                    class="btn btn-link p-0 text-info text-decoration-none"
+                    class="btn btn-link p-0 text-decoration-none"
+                    th:classappend="${u.status == 'APPROVED'}        ? ' text-success' :
+                                    (${u.status == 'REVIEW_REQUIRED'}? ' text-warning' : ' text-info')"
                     data-bs-toggle="modal"
                     th:data-bs-target="${'#details-' + u.id}"
-                    th:text="${u.notes ?: '–'}">
+                    th:text="${u.notes ?: 'View / edit entries'}">
             </button>
-            <span th:unless="${u.status == 'PROCESSED' and u.filename != null}"
+            <span th:unless="${u.filename != null and u.status != 'PROCESSING' and u.status != 'FAILED'}"
                   th:text="${u.notes}">–</span>
           </td>
           <td class="d-flex gap-2">
@@ -96,7 +135,7 @@
     </table>
   </div>
 
-  <!-- ── Detail modals (one per upload) ──────────────────────────────────── -->
+  <!-- ── Detail / review modals (one per upload) ──────────────────────────── -->
   <div th:each="u : ${uploads}"
        th:if="${u.filename != null}"
        th:id="${'details-' + u.id}"
@@ -140,37 +179,78 @@
             </div>
           </div>
 
-          <!-- Extracted entries -->
-          <h6 class="text-muted mb-2">Extracted entries</h6>
-          <div th:with="entries=${entriesByFilename[u.filename]}">
-            <p th:if="${entries == null or entries.empty}"
-               class="text-muted fst-italic small">No entries extracted for this upload.</p>
-            <div th:unless="${entries == null or entries.empty}" class="table-responsive">
-              <table class="table table-dark table-sm table-striped mb-0">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Player</th>
-                    <th>Alliance</th>
-                    <th>Points / Power</th>
-                    <th>Kills</th>
-                    <th>Captured at</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr th:each="e : ${entries}">
-                    <td th:text="${e.rank}">–</td>
-                    <td th:text="${e.playerName}">–</td>
-                    <td th:text="${e.allianceTag}">–</td>
-                    <td th:text="${e.power}">–</td>
-                    <td th:text="${e.kills}">–</td>
-                    <td th:text="${e.capturedAt}">–</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <!-- Editable entries table -->
+          <div class="d-flex align-items-center mb-2 gap-2">
+            <h6 class="text-muted mb-0">Extracted entries</h6>
+            <small class="text-muted fst-italic">— click any cell to edit, changes save automatically</small>
+          </div>
+          <div th:with="entries=${entriesByFilename[u.filename]}" class="table-responsive">
+            <table class="table table-dark table-sm table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Player</th>
+                  <th>Alliance</th>
+                  <th>Points / Power</th>
+                  <th>Kills</th>
+                  <th>Captured at</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody th:id="${'entries-tbody-' + u.id}">
+                <tr th:if="${entries == null or entries.empty}">
+                  <td colspan="7" class="text-muted fst-italic text-center">
+                    No entries extracted — add rows manually below.
+                  </td>
+                </tr>
+                <tr th:each="e : ${entries}" th:data-entry-id="${e.id}">
+                  <td contenteditable="true" data-field="rank"
+                      th:text="${e.rank ?: ''}"></td>
+                  <td contenteditable="true" data-field="playerName"
+                      th:text="${e.playerName ?: ''}"></td>
+                  <td contenteditable="true" data-field="allianceTag"
+                      th:text="${e.allianceTag ?: ''}"></td>
+                  <td contenteditable="true" data-field="power"
+                      th:text="${e.power ?: ''}"></td>
+                  <td contenteditable="true" data-field="kills"
+                      th:text="${e.kills ?: ''}"></td>
+                  <td class="text-muted small" th:text="${e.capturedAt}">–</td>
+                  <td>
+                    <button type="button"
+                            class="btn btn-sm btn-outline-danger py-0 px-1"
+                            onclick="deleteEntry(this)">✕</button>
+                  </td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="7" class="pt-2">
+                    <button type="button"
+                            class="btn btn-sm btn-outline-info"
+                            th:data-photo-id="${u.id}"
+                            th:data-tbody-id="${'entries-tbody-' + u.id}"
+                            onclick="addEntry(this)">
+                      + Add row
+                    </button>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div><!-- /modal-body -->
+
+        <div class="modal-footer border-secondary justify-content-between">
+          <div th:id="${'approve-msg-' + u.id}" class="small text-muted"></div>
+          <div class="d-flex gap-2">
+            <button type="button"
+                    class="btn btn-success"
+                    th:data-photo-id="${u.id}"
+                    onclick="approveReview(this)">
+              ✓ Approve Review
+            </button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+          </div>
+        </div>
 
       </div>
     </div>
@@ -180,5 +260,141 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  const csrf       = document.querySelector('meta[name="_csrf"]')?.content;
+  const csrfHeader = document.querySelector('meta[name="_csrf_header"]')?.content;
+
+  function apiHeaders() {
+    return { 'Content-Type': 'application/json', [csrfHeader]: csrf };
+  }
+  function noBodyHeaders() {
+    return { [csrfHeader]: csrf };
+  }
+
+  /* ── collect all editable fields from a row ── */
+  function collectRow(row) {
+    return {
+      rank:        toInt(cellText(row, 'rank')),
+      playerName:  toStr(cellText(row, 'playerName')),
+      allianceTag: toStr(cellText(row, 'allianceTag')),
+      power:       toLong(cellText(row, 'power')),
+      kills:       toLong(cellText(row, 'kills'))
+    };
+  }
+  function cellText(row, field) {
+    return row.querySelector(`[data-field="${field}"]`)?.textContent ?? '';
+  }
+  function toInt(s)  { const n = parseInt(s.trim()); return isNaN(n) ? null : n; }
+  function toLong(s) { const n = parseInt(s.replace(/[^0-9]/g, '')); return isNaN(n) ? null : n; }
+  function toStr(s)  { const t = s.trim(); return t || null; }
+
+  /* ── auto-save on focusout (bubbles, unlike blur) ── */
+  document.addEventListener('focusout', function (e) {
+    const cell = e.target.closest('td[data-field]');
+    if (!cell) return;
+    const row = cell.closest('tr[data-entry-id]');
+    if (!row) return;
+
+    const id   = row.dataset.entryId;
+    const data = collectRow(row);
+
+    cell.classList.add('ce-saving');
+    fetch(`/api/entries/${id}`, {
+      method:  'PATCH',
+      headers: apiHeaders(),
+      body:    JSON.stringify(data)
+    }).then(r => {
+      cell.classList.remove('ce-saving');
+      cell.classList.add(r.ok ? 'ce-saved' : 'ce-error');
+      setTimeout(() => cell.classList.remove('ce-saved', 'ce-error'), 800);
+    }).catch(() => {
+      cell.classList.remove('ce-saving');
+      cell.classList.add('ce-error');
+      setTimeout(() => cell.classList.remove('ce-error'), 800);
+    });
+  });
+
+  /* ── Enter key saves (blurs) instead of inserting newline ── */
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && e.target.closest('td[data-field]')) {
+      e.preventDefault();
+      e.target.blur();
+    }
+  });
+
+  /* ── build a new editable row from an entry object ── */
+  function buildRow(entry) {
+    const tr = document.createElement('tr');
+    tr.dataset.entryId = entry.id;
+    tr.innerHTML =
+      `<td contenteditable="true" data-field="rank">${entry.rank ?? ''}</td>` +
+      `<td contenteditable="true" data-field="playerName">${entry.playerName ?? ''}</td>` +
+      `<td contenteditable="true" data-field="allianceTag">${entry.allianceTag ?? ''}</td>` +
+      `<td contenteditable="true" data-field="power">${entry.power ?? ''}</td>` +
+      `<td contenteditable="true" data-field="kills">${entry.kills ?? ''}</td>` +
+      `<td class="text-muted small">${entry.capturedAt ?? ''}</td>` +
+      `<td><button type="button" class="btn btn-sm btn-outline-danger py-0 px-1" onclick="deleteEntry(this)">✕</button></td>`;
+    return tr;
+  }
+
+  /* ── add a new empty row ── */
+  window.addEntry = function (btn) {
+    const photoId = btn.dataset.photoId;
+    const tbodyId = btn.dataset.tbodyId;
+    btn.disabled = true;
+    fetch(`/api/photos/${photoId}/entries`, {
+      method:  'POST',
+      headers: noBodyHeaders()
+    }).then(r => r.json()).then(entry => {
+      const tbody = document.getElementById(tbodyId);
+      // Remove the "no entries" placeholder row if present
+      const placeholder = tbody.querySelector('tr td[colspan]');
+      if (placeholder) placeholder.closest('tr').remove();
+      const row = buildRow(entry);
+      tbody.appendChild(row);
+      row.querySelector('[data-field="playerName"]').focus();
+    }).finally(() => { btn.disabled = false; });
+  };
+
+  /* ── delete a row ── */
+  window.deleteEntry = function (btn) {
+    const row = btn.closest('tr');
+    const id  = row.dataset.entryId;
+    if (!confirm('Delete this entry?')) return;
+    fetch(`/api/entries/${id}`, {
+      method:  'DELETE',
+      headers: noBodyHeaders()
+    }).then(r => {
+      if (r.ok || r.status === 204) row.remove();
+    });
+  };
+
+  /* ── approve review ── */
+  window.approveReview = function (btn) {
+    const photoId = btn.dataset.photoId;
+    btn.disabled = true;
+    fetch(`/api/photos/${photoId}/approve`, {
+      method:  'POST',
+      headers: noBodyHeaders()
+    }).then(r => r.json()).then(() => {
+      // Update status badge in history table
+      const badge = document.getElementById(`status-badge-${photoId}`);
+      if (badge) {
+        badge.textContent = 'APPROVED';
+        badge.className   = 'text-success fw-semibold';
+      }
+      // Update approve button
+      btn.textContent = '✓ Approved';
+      btn.classList.replace('btn-success', 'btn-outline-success');
+      // Show confirmation message in footer
+      const msg = document.getElementById(`approve-msg-${photoId}`);
+      if (msg) msg.textContent = 'Review approved — entries are now final.';
+    }).catch(() => {
+      btn.disabled = false;
+    });
+  };
+})();
+</script>
 </body>
 </html>

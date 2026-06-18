@@ -35,6 +35,7 @@ public class SecurityConfig {
                 .requestMatchers("/login", "/error").permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")
                 .requestMatchers("/upload/**").hasAnyRole("ADMIN", "SUBMITTER")
+                .requestMatchers("/api/**").hasAnyRole("ADMIN", "SUBMITTER")
                 .requestMatchers("/rankings/**", "/dashboard", "/").hasAnyRole("ADMIN", "SUBMITTER", "VIEWER")
                 .anyRequest().authenticated()
             )

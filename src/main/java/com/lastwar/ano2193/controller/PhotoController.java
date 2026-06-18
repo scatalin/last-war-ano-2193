@@ -135,7 +135,7 @@ public class PhotoController {
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
-            upload.setStatus("PROCESSED");
+            upload.setStatus("PRE_PARSED");
             upload.setNotes(entries.size() + " entries extracted");
             photoUploadRepository.save(upload);
             log.debug("handleUpload: complete storedName={} entriesExtracted={}", storedName, entries.size());
@@ -198,7 +198,7 @@ public class PhotoController {
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
-            upload.setStatus("PROCESSED");
+            upload.setStatus("REVIEW_REQUIRED");
             upload.setNotes(entries.size() + " entries extracted");
             photoUploadRepository.save(upload);
             log.debug("reparsePhoto: complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());

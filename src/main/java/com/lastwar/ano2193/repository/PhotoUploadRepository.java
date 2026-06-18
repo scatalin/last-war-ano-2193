@@ -9,4 +9,6 @@ public interface PhotoUploadRepository extends JpaRepository<PhotoUpload, Long> 
     List<PhotoUpload> findByUploadedByOrderByUploadedAtDesc(String uploadedBy);
 
     List<PhotoUpload> findByStatus(String status);
+
+    java.util.Optional<PhotoUpload> findByFilename(String filename);
 }
