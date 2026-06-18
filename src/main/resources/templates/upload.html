@@ -249,14 +249,13 @@
                   <th>Player</th>
                   <th>Alliance</th>
                   <th>Points / Power</th>
-                  <th>Kills</th>
                   <th>Captured at</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody th:id="${'entries-tbody-' + u.id}">
                 <tr th:if="${entries == null or entries.empty}">
-                  <td colspan="7" class="text-light fst-italic text-center">
+                  <td colspan="6" class="text-light fst-italic text-center">
                     No entries — add rows manually below.
                   </td>
                 </tr>
@@ -265,7 +264,6 @@
                   <td contenteditable="true" data-field="playerName"  th:text="${e.playerName ?: ''}"></td>
                   <td contenteditable="true" data-field="allianceTag" th:text="${e.allianceTag ?: ''}"></td>
                   <td contenteditable="true" data-field="power"       th:text="${e.power ?: ''}"></td>
-                  <td contenteditable="true" data-field="kills"       th:text="${e.kills ?: ''}"></td>
                   <td class="text-light small" th:text="${e.capturedAt}">–</td>
                   <td>
                     <button type="button"
@@ -279,7 +277,7 @@
               </tbody>
               <tfoot>
                 <tr>
-                  <td colspan="7" class="pt-2">
+                  <td colspan="6" class="pt-2">
                     <button type="button"
                             class="btn btn-sm btn-outline-info"
                             th:data-photo-id="${u.id}"
@@ -447,8 +445,7 @@ const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
       rank:        toInt( cell(row, 'rank') ),
       playerName:  toStr( cell(row, 'playerName') ),
       allianceTag: toStr( cell(row, 'allianceTag') ),
-      power:       toLong( cell(row, 'power') ),
-      kills:       toLong( cell(row, 'kills') )
+      power:       toLong( cell(row, 'power') )
     };
   }
   function cell(row, field) {
@@ -496,7 +493,6 @@ const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
       '<td contenteditable="true" data-field="playerName">'  + (entry.playerName  ?? '') + '</td>' +
       '<td contenteditable="true" data-field="allianceTag">' + (entry.allianceTag ?? '') + '</td>' +
       '<td contenteditable="true" data-field="power">'       + (entry.power       ?? '') + '</td>' +
-      '<td contenteditable="true" data-field="kills">'       + (entry.kills       ?? '') + '</td>' +
       '<td class="text-light small">'                        + (entry.capturedAt  ?? '') + '</td>' +
       '<td><button type="button" class="btn btn-sm btn-outline-danger icon-btn"' +
         ' data-tip="Delete this entry" onclick="deleteEntry(this)">' +
