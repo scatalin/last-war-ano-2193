@@ -53,7 +53,10 @@ public class PhotoController {
 
     @GetMapping
     public String uploadForm(Model model) {
-        model.addAttribute("uploads", photoUploadRepository.findAll());
+        log.debug("GET /upload");
+        List<PhotoUpload> uploads = photoUploadRepository.findAll();
+        log.trace("uploadForm: pastUploadCount={}", uploads.size());
+        model.addAttribute("uploads", uploads);
         return "upload";
     }
 
@@ -64,12 +67,17 @@ public class PhotoController {
             @AuthenticationPrincipal UserDetails userDetails,
             RedirectAttributes redirectAttributes) {
 
+        log.debug("POST /upload originalFilename={} category={} user={} size={}",
+                file.getOriginalFilename(), category, userDetails.getUsername(), file.getSize());
+
         if (file.isEmpty()) {
+            log.debug("handleUpload: rejected – file is empty");
             redirectAttributes.addFlashAttribute("error", "Please select a file to upload.");
             return "redirect:/upload";
         }
 
         String safeCategory = category.replaceAll("[^A-Za-z0-9_\\-]", "_");
+        log.trace("handleUpload: safeCategory={}", safeCategory);
         PhotoUpload upload = new PhotoUpload();
         upload.setOriginalFilename(file.getOriginalFilename());
         upload.setCategory(safeCategory);
@@ -77,6 +85,7 @@ public class PhotoController {
         upload.setUploadedAt(LocalDateTime.now());
         upload.setStatus("PROCESSING");
         photoUploadRepository.save(upload);
+        log.trace("handleUpload: PhotoUpload saved with id={} status=PROCESSING", upload.getId());
 
         try {
             Path dir = Paths.get(uploadDir);
@@ -86,19 +95,23 @@ public class PhotoController {
             String ext = getExtension(file.getOriginalFilename());
             String storedName = UUID.randomUUID() + ext;
             Path target = dir.resolve(storedName);
+            log.trace("handleUpload: storing file as target={}", target);
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
 
             upload.setFilename(storedName);
 
             File imageFile = target.toFile();
+            log.debug("handleUpload: invoking image parser for storedName={}", storedName);
             List<RankingEntry> entries = imageParsingService.parseImage(
                     imageFile, safeCategory, userDetails.getUsername());
+            log.trace("handleUpload: parser returned {} entries", entries.size());
             rankingService.saveAll(entries);
             csvService.exportRankingsToCsv();
 
             upload.setStatus("PROCESSED");
             upload.setNotes(entries.size() + " entries extracted");
             photoUploadRepository.save(upload);
+            log.debug("handleUpload: complete storedName={} entriesExtracted={}", storedName, entries.size());
 
             redirectAttributes.addFlashAttribute("success",
                     "Upload complete. " + entries.size() + " entries extracted.");
