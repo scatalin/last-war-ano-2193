@@ -90,7 +90,8 @@ public class VisionLlmOcrStrategy implements OcrStrategy {
             }
 
             JsonNode root = MAPPER.readTree(response.body());
-            return root.path("choices").path(0).path("message").path("content").asText();
+            return stripCodeFence(
+                    root.path("choices").path(0).path("message").path("content").asText());
 
         } catch (OcrException e) {
             throw e;
@@ -100,6 +101,21 @@ public class VisionLlmOcrStrategy implements OcrStrategy {
         } catch (IOException e) {
             throw new OcrException("Vision LLM request failed: " + e.getMessage(), e);
         }
+    }
+
+    // Vision LLMs sometimes wrap their response in a markdown code fence.
+    // Strip it so callers always receive plain text.
+    private static String stripCodeFence(String text) {
+        String t = text.strip();
+        if (!t.startsWith("```")) return text;
+        int firstNl = t.indexOf('\n');
+        if (firstNl < 0) return text;
+        t = t.substring(firstNl + 1);
+        if (t.stripTrailing().endsWith("```")) {
+            t = t.stripTrailing();
+            t = t.substring(0, t.length() - 3).stripTrailing();
+        }
+        return t;
     }
 
     // LLaVA and most vision models do not benefit from very large images;

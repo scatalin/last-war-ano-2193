@@ -22,7 +22,7 @@ public class OcrConfig {
     @Value("${ocr.tessdata-path:/usr/share/tesseract-ocr/5/tessdata}")
     private String tessDataPath;
 
-    // ── Vision LLM (OpenAI-compatible) ───────────────────────────────────────
+    // ── Vision LLM / Ollama (OpenAI-compatible, self-hosted) ─────────────────
     @Value("${ocr.vision.base-url:http://localhost:11434}")
     private String visionBaseUrl;
 
@@ -41,12 +41,25 @@ public class OcrConfig {
             "Do not add explanations, headers, or any extra formatting. Return plain text only.}")
     private String visionPrompt;
 
+    // ── OpenAI (ChatGPT) ─────────────────────────────────────────────────────
+    @Value("${ocr.openai.base-url:https://api.openai.com}")
+    private String openAiBaseUrl;
+
+    @Value("${ocr.openai.model:gpt-4o}")
+    private String openAiModel;
+
+    // Set via env var OCR_OPENAI_API_KEY — never hard-code in application.properties
+    @Value("${ocr.openai.api-key:}")
+    private String openAiApiKey;
+
     @Bean
     public OcrStrategy ocrStrategy() {
         OcrStrategy strategy = switch (strategyName.toLowerCase()) {
             case "mock"       -> new MockOcrStrategy();
             case "vision-llm" -> new VisionLlmOcrStrategy(
                     visionBaseUrl, visionModel, visionApiKey, visionPrompt, visionTimeoutSeconds);
+            case "openai"     -> new VisionLlmOcrStrategy(
+                    openAiBaseUrl, openAiModel, openAiApiKey, visionPrompt, visionTimeoutSeconds);
             default           -> new TesseractOcrStrategy(tessDataPath);
         };
         log.info("OCR strategy active: {}", strategy.name());
