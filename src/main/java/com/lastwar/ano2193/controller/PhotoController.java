@@ -281,6 +281,54 @@ public class PhotoController {
         return "redirect:/upload";
     }
 
+    @PostMapping("/remap/{id}")
+    public String remapPhoto(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserDetails userDetails,
+            RedirectAttributes redirectAttributes) {
+
+        log.debug("POST /upload/remap/{} user={}", id, userDetails.getUsername());
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(id);
+        if (opt.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "Upload not found.");
+            return "redirect:/upload";
+        }
+
+        PhotoUpload upload = opt.get();
+        String rawOcrText = upload.getRawOcrText();
+        if (rawOcrText == null || rawOcrText.isBlank()) {
+            redirectAttributes.addFlashAttribute("error",
+                    "No stored OCR text — run OCR first using the re-scan button.");
+            return "redirect:/upload";
+        }
+
+        try {
+            log.info("remapPhoto: re-mapping stored OCR text for id={} filename={}", id, upload.getFilename());
+            rankingService.deleteBySourcePhotoPath(upload.getFilename());
+
+            List<RankingEntry> entries = imageParsingService.parseOcrText(
+                    rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
+            log.info("remapPhoto: extracted {} entries for id={}", entries.size(), id);
+
+            rankingService.saveAll(entries);
+            csvService.exportRankingsToCsv();
+
+            upload.setStatus("REVIEW_REQUIRED");
+            upload.setNotes(entries.size() + " entries extracted (remapped)");
+            photoUploadRepository.save(upload);
+
+            redirectAttributes.addFlashAttribute("success",
+                    "Re-map complete. " + entries.size() + " entries extracted.");
+        } catch (Exception e) {
+            log.error("Re-map error for id={}", id, e);
+            upload.setStatus("FAILED");
+            upload.setNotes(e.getMessage());
+            photoUploadRepository.save(upload);
+            redirectAttributes.addFlashAttribute("error", "Re-map failed: " + e.getMessage());
+        }
+        return "redirect:/upload";
+    }
+
     @GetMapping("/image/{id}")
     public ResponseEntity<Resource> viewImage(@PathVariable Long id) throws IOException {
         log.debug("GET /upload/image/{}", id);
