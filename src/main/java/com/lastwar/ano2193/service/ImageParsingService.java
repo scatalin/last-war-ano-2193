@@ -61,17 +61,21 @@ public class ImageParsingService {
      */
     public List<RankingEntry> parseOcrText(String ocrText, String category,
                                     String submittedBy, String sourcePhoto) {
+        log.debug("parseOcrText: category={} submittedBy={} sourcePhoto={}", category, submittedBy, sourcePhoto);
         List<RankingEntry> entries = new ArrayList<>();
         if (ocrText == null || ocrText.isBlank()) {
+            log.debug("parseOcrText: input is blank, returning empty list");
             return entries;
         }
 
         String[] lines = ocrText.split("\\r?\\n");
+        log.trace("parseOcrText: rawLineCount={}", lines.length);
         int autoRank = 1;
         for (String raw : lines) {
             String line = raw.trim();
             if (line.isEmpty()) continue;
 
+            log.trace("parseOcrText: processing line rank={} raw='{}'", autoRank, line);
             RankingEntry entry = new RankingEntry();
             entry.setRank(autoRank++);
             entry.setCategory(category);
@@ -89,18 +93,24 @@ public class ImageParsingService {
                 if (!digits.isEmpty() && digits.length() >= 4) {
                     long value = Long.parseLong(digits);
                     if (numericIndex == 0) {
+                        log.trace("parseOcrText: token='{}' → power={}", token, value);
                         entry.setPower(value);
                     } else if (numericIndex == 1) {
+                        log.trace("parseOcrText: token='{}' → kills={}", token, value);
                         entry.setKills(value);
                     }
                     numericIndex++;
                 } else if (!nameCaptured && token.matches("[A-Za-z].*")) {
+                    log.trace("parseOcrText: token='{}' → playerName", token);
                     entry.setPlayerName(token);
                     nameCaptured = true;
                 }
             }
+            log.trace("parseOcrText: entry rank={} playerName={} power={} kills={}",
+                    entry.getRank(), entry.getPlayerName(), entry.getPower(), entry.getKills());
             entries.add(entry);
         }
+        log.debug("parseOcrText: parsed {} entries", entries.size());
         return entries;
     }
 }

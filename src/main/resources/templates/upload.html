@@ -53,6 +53,7 @@
           <th>Date</th>
           <th>Status</th>
           <th>Notes</th>
+          <th></th>
         </tr>
       </thead>
       <tbody>
@@ -68,6 +69,11 @@
             </span>
           </td>
           <td th:text="${u.notes}">–</td>
+          <td>
+            <a th:if="${u.filename != null}"
+               th:href="@{/upload/file/{id}(id=${u.id})}"
+               class="btn btn-sm btn-outline-light">Download</a>
+          </td>
         </tr>
       </tbody>
     </table>

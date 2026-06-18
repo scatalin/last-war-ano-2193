@@ -13,7 +13,7 @@
 
     <groupId>com.lastwar</groupId>
     <artifactId>ano2193</artifactId>
-    <version>0.0.4-SNAPSHOT</version>
+    <version>0.0.5-SNAPSHOT</version>
     <packaging>jar</packaging>
     <name>last-war-ano-2193</name>
     <description>Last War Alliance Manager - Anno 2193</description>

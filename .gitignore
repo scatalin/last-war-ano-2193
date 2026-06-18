@@ -32,3 +32,6 @@ replay_pid*
 # Application runtime data (generated at runtime – tracked separately if needed)
 uploads/
 data/
+
+# Local dev resources (bind-mounted into Docker; set APP_RESOURCES_DIR to override)
+test-resources/

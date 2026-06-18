@@ -37,9 +37,12 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void createIfAbsent(String username, String password, Set<String> roles) {
+        log.debug("createIfAbsent: checking username={}", username);
         if (!userService.existsByUsername(username)) {
             userService.createUser(username, password, roles);
             log.info("Created default user '{}' with roles {}", username, roles);
+        } else {
+            log.debug("createIfAbsent: '{}' already exists – skipping", username);
         }
     }
 }

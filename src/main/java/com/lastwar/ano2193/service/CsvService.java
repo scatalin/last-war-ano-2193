@@ -57,15 +57,19 @@ public class CsvService {
 
     @PostConstruct
     public void loadFromCsv() {
+        log.debug("loadFromCsv: checking if import needed");
         Path dir = ensureDir();
         if (dir == null) return;
 
-        if (rankingEntryRepository.count() > 0) {
+        long existingCount = rankingEntryRepository.count();
+        log.trace("loadFromCsv: existingCount={}", existingCount);
+        if (existingCount > 0) {
             log.info("Database already contains ranking data – skipping CSV import");
             return;
         }
 
         Path csvFile = dir.resolve(RANKINGS_FILENAME);
+        log.trace("loadFromCsv: csvFile={} exists={}", csvFile, Files.exists(csvFile));
         if (Files.exists(csvFile)) {
             log.info("Importing ranking data from {}", csvFile);
             try {
@@ -89,14 +93,18 @@ public class CsvService {
      * Called by the scheduler and on demand from the admin UI.
      */
     public void exportRankingsToCsv() {
+        log.debug("exportRankingsToCsv: starting");
         Path dir = ensureDir();
         if (dir == null) return;
 
         Path csvFile = dir.resolve(RANKINGS_FILENAME);
         List<RankingEntry> entries = rankingEntryRepository.findAll();
+        log.trace("exportRankingsToCsv: csvFile={} entries={}", csvFile, entries.size());
         try (CSVWriter writer = new CSVWriter(new FileWriter(csvFile.toFile()))) {
             writer.writeNext(RANKINGS_HEADER);
             for (RankingEntry e : entries) {
+                log.trace("exportRankingsToCsv: writing id={} playerName={} category={} rank={}",
+                        e.getId(), e.getPlayerName(), e.getCategory(), e.getRank());
                 writer.writeNext(new String[]{
                         str(e.getId()),
                         str(e.getRank()),
@@ -119,14 +127,20 @@ public class CsvService {
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private void importRankingsCsv(Path csvFile) throws IOException, CsvValidationException {
+        log.debug("importRankingsCsv: file={}", csvFile);
         try (CSVReader reader = new CSVReader(new FileReader(csvFile.toFile()))) {
             String[] header = reader.readNext();
+            log.trace("importRankingsCsv: header={}", Arrays.toString(header));
             if (header == null) return;
 
             String[] line;
             int imported = 0;
             while ((line = reader.readNext()) != null) {
-                if (line.length < RANKINGS_HEADER.length) continue;
+                if (line.length < RANKINGS_HEADER.length) {
+                    log.trace("importRankingsCsv: skipping short row (columns={}) row={}",
+                            line.length, Arrays.toString(line));
+                    continue;
+                }
                 try {
                     RankingEntry entry = new RankingEntry();
                     // Skip line[0] (id) – let JPA auto-generate a new one
@@ -141,6 +155,9 @@ public class CsvService {
                     if (line.length > 9 && !line[9].isBlank()) {
                         entry.setCapturedAt(LocalDateTime.parse(line[9]));
                     }
+                    log.trace("importRankingsCsv: parsed rank={} playerName={} category={} power={} kills={}",
+                            entry.getRank(), entry.getPlayerName(), entry.getCategory(),
+                            entry.getPower(), entry.getKills());
                     rankingEntryRepository.save(entry);
                     imported++;
                 } catch (Exception ex) {
