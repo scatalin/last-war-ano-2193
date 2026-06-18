@@ -34,11 +34,14 @@ import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/upload")
@@ -75,6 +78,22 @@ public class PhotoController {
         model.addAttribute("uploads", uploads);
         model.addAttribute("categories", categoryService.findAll());
 
+        // Build a JSON-serialisable list for the two-step category→instance picker.
+        // Sorted: newest startDate first, eternal (null startDate) last.
+        List<Map<String, Object>> instancesJson = categoryService.findAllInstances().stream()
+                .sorted(Comparator.comparing(
+                        i -> i.getStartDate(),
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(i -> {
+                    Map<String, Object> m = new LinkedHashMap<>();
+                    m.put("id",         i.getId());
+                    m.put("categoryId", i.getCategory().getId());
+                    m.put("label",      i.getInstanceLabel());
+                    return m;
+                })
+                .collect(Collectors.toList());
+        model.addAttribute("instancesJson", instancesJson);
+
         Map<String, List<RankingEntry>> entriesByFilename = new HashMap<>();
         for (PhotoUpload u : uploads) {
             if (u.getFilename() != null) {
@@ -89,20 +108,28 @@ public class PhotoController {
     @PostMapping
     public String handleUpload(
             @RequestParam("file") List<MultipartFile> files,
-            @RequestParam("category") String category,
+            @RequestParam("categoryInstanceId") Long categoryInstanceId,
             @AuthenticationPrincipal UserDetails userDetails,
             RedirectAttributes redirectAttributes) {
 
+        var instanceOpt = categoryService.findInstanceById(categoryInstanceId);
+        if (instanceOpt.isEmpty()) {
+            redirectAttributes.addFlashAttribute("error", "Selected category instance not found.");
+            return "redirect:/upload";
+        }
+        var instance = instanceOpt.get();
+        String categoryLabel = instance.getDisplayName();
+        String categoryName  = instance.getCategory().getName();
+
         List<MultipartFile> nonEmpty = files.stream()
                 .filter(f -> !f.isEmpty()).toList();
-        log.info("POST /upload fileCount={} category={} user={}", nonEmpty.size(), category, userDetails.getUsername());
+        log.info("POST /upload fileCount={} category='{}' user={}", nonEmpty.size(), categoryLabel, userDetails.getUsername());
 
         if (nonEmpty.isEmpty()) {
             redirectAttributes.addFlashAttribute("error", "Please select at least one file to upload.");
             return "redirect:/upload";
         }
 
-        String safeCategory = category.replaceAll("[^A-Za-z0-9_\\-]", "_");
         Path dir = Paths.get(uploadDir);
 
         int succeeded = 0, failedCount = 0, totalEntries = 0;
@@ -114,7 +141,8 @@ public class PhotoController {
 
             PhotoUpload upload = new PhotoUpload();
             upload.setOriginalFilename(originalFilename);
-            upload.setCategory(safeCategory);
+            upload.setCategory(categoryLabel);
+            upload.setCategoryInstanceId(categoryInstanceId);
             upload.setUploadedBy(userDetails.getUsername());
             upload.setUploadedAt(LocalDateTime.now());
             upload.setStatus("PROCESSING");
@@ -136,7 +164,7 @@ public class PhotoController {
                     log.info("handleUpload: starting OCR for storedName={}", storedName);
                     rawOcrText = imageParsingService.extractRawText(target.toFile());
                     entries = imageParsingService.parseOcrText(
-                            rawOcrText, safeCategory, userDetails.getUsername(), storedName);
+                            rawOcrText, categoryName, userDetails.getUsername(), storedName);
                     log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
                 } catch (TesseractException e) {
                     ocrFailed = true;

@@ -1,5 +1,6 @@
 package com.lastwar.ano2193.controller;
 
+import com.lastwar.ano2193.model.CategoryInstance;
 import com.lastwar.ano2193.model.UploadCategory;
 import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
@@ -12,6 +13,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Set;
 
@@ -116,6 +118,7 @@ public class AdminController {
     public String categories(Model model) {
         log.debug("GET /admin/categories");
         model.addAttribute("categories", categoryService.findAll());
+        model.addAttribute("instances", categoryService.findAllInstances());
         return "admin/categories";
     }
 
@@ -169,6 +172,46 @@ public class AdminController {
         log.debug("POST /admin/categories/delete/{}", id);
         categoryService.delete(id);
         redirectAttributes.addFlashAttribute("success", "Category deleted.");
+        return "redirect:/admin/categories";
+    }
+
+    // ── Category instances ────────────────────────────────────────────────────
+
+    @PostMapping("/categories/instances/create")
+    public String createInstance(
+            @RequestParam Long categoryId,
+            @RequestParam String name,
+            @RequestParam(defaultValue = "false") boolean eternal,
+            @RequestParam(required = false) LocalDate startDate,
+            @RequestParam(defaultValue = "false") boolean singleDate,
+            @RequestParam(required = false) LocalDate endDate,
+            RedirectAttributes redirectAttributes) {
+
+        log.debug("POST /admin/categories/instances/create categoryId={} name={} eternal={}", categoryId, name, eternal);
+        return categoryService.findById(categoryId).map(cat -> {
+            CategoryInstance inst = new CategoryInstance();
+            inst.setCategory(cat);
+            inst.setName(name.trim());
+            inst.setEternal(eternal);
+            if (!eternal) {
+                inst.setStartDate(startDate);
+                inst.setEndDate(singleDate ? null : endDate);
+            }
+            categoryService.saveInstance(inst);
+            redirectAttributes.addFlashAttribute("success",
+                    "Instance created: " + inst.getDisplayName());
+            return "redirect:/admin/categories";
+        }).orElseGet(() -> {
+            redirectAttributes.addFlashAttribute("error", "Category not found.");
+            return "redirect:/admin/categories";
+        });
+    }
+
+    @PostMapping("/categories/instances/delete/{id}")
+    public String deleteInstance(@PathVariable Long id, RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/instances/delete/{}", id);
+        categoryService.deleteInstance(id);
+        redirectAttributes.addFlashAttribute("success", "Instance deleted.");
         return "redirect:/admin/categories";
     }
 }

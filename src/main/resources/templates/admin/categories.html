@@ -18,16 +18,18 @@
   <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
   <div th:if="${error}"   class="alert alert-danger"  th:text="${error}"></div>
 
-  <!-- Create category form -->
-  <div class="card bg-secondary mb-4">
-    <div class="card-header">Add New Category</div>
+  <!-- ── Section 1: Category definitions ───────────────────────────────────── -->
+  <h4 class="mb-3">Category Definitions</h4>
+  <p class="text-light small">Templates for recurring ranking types (kills, power, daily…). Uploaders pick a timed <em>instance</em> of one of these.</p>
+
+  <div class="card bg-secondary mb-3">
+    <div class="card-header">Add Definition</div>
     <div class="card-body">
       <form method="post" th:action="@{/admin/categories/create}" class="row g-2 align-items-end">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <div class="col-md-4">
           <label class="form-label small">Name</label>
-          <input name="name" type="text" class="form-control"
-                 placeholder="e.g. kills" required>
+          <input name="name" type="text" class="form-control" placeholder="e.g. kills" required>
           <div class="form-text text-light">Letters, numbers, _ and - only.</div>
         </div>
         <div class="col-md-6">
@@ -42,36 +44,24 @@
     </div>
   </div>
 
-  <!-- Categories table -->
-  <h4 class="mb-3">Existing Categories</h4>
-  <div th:if="${categories.empty}" class="text-light">No categories defined yet.</div>
-  <div th:unless="${categories.empty}" class="table-responsive">
+  <div th:if="${categories.empty}" class="text-light mb-4">No category definitions yet.</div>
+  <div th:unless="${categories.empty}" class="table-responsive mb-5">
     <table class="table table-dark table-striped table-hover align-middle">
       <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Description</th>
-          <th>Actions</th>
-        </tr>
+        <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
       </thead>
       <tbody>
         <tr th:each="c : ${categories}">
-          <td class="text-light small" th:text="${c.id}"></td>
           <td class="fw-semibold" th:text="${c.name}"></td>
-          <td class="text-light" th:text="${c.description}">–</td>
+          <td class="text-light"  th:text="${c.description}">–</td>
           <td>
             <div class="d-flex gap-2">
-              <!-- Edit modal trigger -->
               <button type="button" class="btn btn-outline-warning btn-sm"
                       data-bs-toggle="modal"
-                      th:data-bs-target="${'#edit-modal-' + c.id}">
-                Edit
-              </button>
-              <!-- Delete -->
+                      th:data-bs-target="${'#edit-cat-' + c.id}">Edit</button>
               <form method="post"
                     th:action="@{/admin/categories/delete/{id}(id=${c.id})}"
-                    onsubmit="return confirm('Delete category ' + /*[[${c.name}]]*/ '' + '?')">
+                    onsubmit="return confirm('Delete definition ' + /*[[${c.name}]]*/ '' + '? This will not remove existing instances.')">
                 <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
                 <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
               </form>
@@ -81,15 +71,104 @@
       </tbody>
     </table>
   </div>
+
+  <!-- ── Section 2: Category instances ─────────────────────────────────────── -->
+  <h4 class="mb-3">Category Instances</h4>
+  <p class="text-light small">Each instance is a specific time period (or eternal) of a definition. Uploaders select an instance when submitting screenshots.</p>
+
+  <div class="card bg-secondary mb-3">
+    <div class="card-header">Add Instance</div>
+    <div class="card-body">
+      <form id="inst-form" method="post" th:action="@{/admin/categories/instances/create}"
+            class="row g-3 align-items-start">
+        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+        <!-- Category definition picker -->
+        <div class="col-md-2">
+          <label class="form-label small">Category</label>
+          <select name="categoryId" class="form-select" required>
+            <option value="" disabled selected>— pick —</option>
+            <option th:each="c : ${categories}" th:value="${c.id}" th:text="${c.name}"></option>
+          </select>
+        </div>
+
+        <!-- Instance name -->
+        <div class="col-md-2">
+          <label class="form-label small">Name</label>
+          <input name="name" type="text" class="form-control"
+                 placeholder="e.g. Week 24" required>
+        </div>
+
+        <!-- Eternal toggle -->
+        <div class="col-md-2 pt-4">
+          <div class="form-check mt-2">
+            <input id="eternal-cb" name="eternal" type="checkbox" class="form-check-input" value="true">
+            <label for="eternal-cb" class="form-check-label">Eternal (no dates)</label>
+          </div>
+        </div>
+
+        <!-- Date fields (hidden when eternal) -->
+        <div id="date-fields" class="col-md-5 row g-2">
+          <div class="col-6">
+            <label class="form-label small">Start date</label>
+            <input id="start-date" name="startDate" type="date" class="form-control">
+          </div>
+          <div class="col-6" id="end-date-wrap">
+            <label class="form-label small">End date</label>
+            <input id="end-date" name="endDate" type="date" class="form-control">
+            <div class="form-check mt-1">
+              <input id="single-date-cb" name="singleDate" type="checkbox"
+                     class="form-check-input" value="true">
+              <label for="single-date-cb" class="form-check-label small">Single date (no end)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-md-2 pt-4">
+          <button type="submit" class="btn btn-success w-100 mt-1">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div th:if="${instances.empty}" class="text-light mb-4">No instances yet.</div>
+  <div th:unless="${instances.empty}" class="table-responsive">
+    <table class="table table-dark table-striped table-hover align-middle">
+      <thead>
+        <tr><th>Category</th><th>Name</th><th>Period</th><th>Start</th><th>End</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        <tr th:each="inst : ${instances}">
+          <td class="fw-semibold" th:text="${inst.category.name}"></td>
+          <td th:text="${inst.name}">–</td>
+          <td>
+            <span th:if="${inst.eternal}"      class="badge bg-info">Eternal</span>
+            <span th:unless="${inst.eternal and inst.endDate == null and inst.startDate != null}" th:if="${!inst.eternal and inst.endDate == null}" class="badge bg-secondary">Single date</span>
+            <span th:if="${!inst.eternal and inst.endDate != null}" class="badge bg-primary">Date range</span>
+          </td>
+          <td class="text-light" th:text="${inst.startDate ?: '—'}"></td>
+          <td class="text-light" th:text="${inst.endDate   ?: '—'}"></td>
+          <td>
+            <form method="post"
+                  th:action="@{/admin/categories/instances/delete/{id}(id=${inst.id})}"
+                  onsubmit="return confirm('Delete instance: ' + /*[[${inst.displayName}]]*/ '' + '?')">
+              <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+              <button type="submit" class="btn btn-outline-danger btn-sm">Delete</button>
+            </form>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
 </div>
 
-<!-- Edit modals (one per category) -->
+<!-- Edit definition modals -->
 <div th:each="c : ${categories}">
-  <div class="modal fade" th:id="${'edit-modal-' + c.id}" tabindex="-1" aria-hidden="true">
+  <div class="modal fade" th:id="${'edit-cat-' + c.id}" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
       <div class="modal-content bg-dark text-light border-secondary">
         <div class="modal-header border-secondary">
-          <h5 class="modal-title">Edit Category</h5>
+          <h5 class="modal-title">Edit Definition</h5>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
         <form method="post" th:action="@{/admin/categories/edit/{id}(id=${c.id})}">
@@ -97,13 +176,11 @@
           <div class="modal-body">
             <div class="mb-3">
               <label class="form-label">Name</label>
-              <input name="name" type="text" class="form-control"
-                     th:value="${c.name}" required>
+              <input name="name" type="text" class="form-control" th:value="${c.name}" required>
             </div>
             <div class="mb-3">
               <label class="form-label">Description</label>
-              <input name="description" type="text" class="form-control"
-                     th:value="${c.description}">
+              <input name="description" type="text" class="form-control" th:value="${c.description}">
             </div>
           </div>
           <div class="modal-footer border-secondary">
@@ -117,5 +194,23 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+(function () {
+  const eternalCb    = document.getElementById('eternal-cb');
+  const dateFields   = document.getElementById('date-fields');
+  const singleDateCb = document.getElementById('single-date-cb');
+  const endDateWrap  = document.getElementById('end-date-wrap');
+
+  eternalCb.addEventListener('change', function () {
+    dateFields.style.display = this.checked ? 'none' : '';
+  });
+
+  singleDateCb.addEventListener('change', function () {
+    endDateWrap.querySelector('input[type=date]').disabled = this.checked;
+    endDateWrap.querySelector('input[type=date]').value    = '';
+    endDateWrap.querySelector('input[type=date]').style.opacity = this.checked ? '0.4' : '';
+  });
+})();
+</script>
 </body>
 </html>
