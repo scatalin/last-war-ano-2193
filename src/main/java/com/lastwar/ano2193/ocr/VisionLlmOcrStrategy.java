@@ -3,13 +3,17 @@ package com.lastwar.ano2193.ocr;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.file.Files;
 import java.time.Duration;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -98,10 +102,37 @@ public class VisionLlmOcrStrategy implements OcrStrategy {
         }
     }
 
+    // LLaVA and most vision models do not benefit from very large images;
+    // downscaling to ≤1024px on the long edge drastically cuts inference time on CPU.
+    private static final int MAX_DIMENSION = 1024;
+
     private String buildDataUrl(File imageFile) throws IOException {
-        byte[] bytes = Files.readAllBytes(imageFile.toPath());
-        String base64 = Base64.getEncoder().encodeToString(bytes);
-        return "data:" + mimeType(imageFile.getName()) + ";base64," + base64;
+        BufferedImage original = ImageIO.read(imageFile);
+        if (original == null) {
+            // Fallback: send raw bytes (unsupported format)
+            byte[] bytes = java.nio.file.Files.readAllBytes(imageFile.toPath());
+            return "data:" + mimeType(imageFile.getName()) + ";base64,"
+                    + Base64.getEncoder().encodeToString(bytes);
+        }
+
+        int w = original.getWidth();
+        int h = original.getHeight();
+        BufferedImage img = original;
+
+        if (w > MAX_DIMENSION || h > MAX_DIMENSION) {
+            double scale = (double) MAX_DIMENSION / Math.max(w, h);
+            int nw = (int) (w * scale);
+            int nh = (int) (h * scale);
+            img = new BufferedImage(nw, nh, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = img.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(original, 0, 0, nw, nh, null);
+            g.dispose();
+        }
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", out);
+        return "data:image/png;base64," + Base64.getEncoder().encodeToString(out.toByteArray());
     }
 
     private static String mimeType(String filename) {

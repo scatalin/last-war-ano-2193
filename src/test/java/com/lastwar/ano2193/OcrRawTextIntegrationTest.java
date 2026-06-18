@@ -1,7 +1,6 @@
 package com.lastwar.ano2193;
 
 import com.lastwar.ano2193.service.ImageParsingService;
-import net.sourceforge.tess4j.TesseractException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -24,7 +23,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * Prerequisite: sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT,
+        properties = "ocr.strategy=tesseract")
 class OcrRawTextIntegrationTest {
 
     // Raw text produced by Tesseract 5.3.4 on ranking-sample.png.

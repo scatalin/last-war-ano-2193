@@ -30,7 +30,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  *
  * Prerequisite: sudo apt-get install -y tesseract-ocr tesseract-ocr-eng
  */
-@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
+@SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = "ocr.strategy=tesseract")
 class ImageParsingServiceDailyTuesdayOcrTest {
 
     @Autowired
