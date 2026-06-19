@@ -29,6 +29,8 @@ public class PhotoUpload {
     @Column(columnDefinition = "TEXT")
     private String rawOcrText;
 
+    private String tag;
+
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -61,4 +63,7 @@ public class PhotoUpload {
 
     public String getRawOcrText() { return rawOcrText; }
     public void setRawOcrText(String rawOcrText) { this.rawOcrText = rawOcrText; }
+
+    public String getTag() { return tag; }
+    public void setTag(String tag) { this.tag = tag; }
 }

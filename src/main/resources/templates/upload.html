@@ -101,6 +101,16 @@
             Category periods are managed by administrators under
             <a th:href="@{/admin/categories}" class="text-info">Admin → Categories</a>.
           </div>
+          <!-- Tag picker — visible only when the selected category has tags defined -->
+          <div id="tag-picker-wrap" class="mt-2" style="display:none">
+            <label for="tag-picker" class="form-label mb-1">
+              Event Tag <span class="text-danger">*</span>
+              <small class="text-muted">(required — determines the ranking column)</small>
+            </label>
+            <select id="tag-picker" name="tagId" class="form-select">
+              <option value="">— select a tag —</option>
+            </select>
+          </div>
         </div>
         <button id="upload-btn" type="submit" class="btn btn-primary">
           <i class="bi bi-cloud-upload me-1"></i>Upload &amp; Process
@@ -118,6 +128,7 @@
         <tr>
           <th>Original Filename</th>
           <th>Category</th>
+          <th>Tag</th>
           <th>Uploaded By</th>
           <th>Date</th>
           <th>Status</th>
@@ -129,6 +140,10 @@
         <tr th:each="u : ${uploads}" th:data-upload-id="${u.id}">
           <td th:text="${u.originalFilename}">–</td>
           <td th:text="${u.category}">–</td>
+          <td>
+            <span th:if="${u.tag != null}" class="badge bg-primary" th:text="${u.tag}"></span>
+            <span th:unless="${u.tag != null}" class="text-muted small">–</span>
+          </td>
           <td th:text="${u.uploadedBy}">–</td>
           <td th:text="${u.uploadedAt}">–</td>
           <td>
@@ -196,12 +211,28 @@
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
       <div class="modal-content bg-dark text-light border-secondary">
 
-        <div class="modal-header border-secondary">
-          <h5 class="modal-title" th:id="${'details-label-' + u.id}">
-            <span th:text="${u.originalFilename}"></span>
-            <small class="text-light ms-2"
-                   th:text="${'— ' + u.category + ' — ' + u.uploadedAt}"></small>
-          </h5>
+        <div class="modal-header border-secondary flex-wrap gap-2">
+          <div>
+            <h5 class="modal-title mb-0" th:id="${'details-label-' + u.id}">
+              <span th:text="${u.originalFilename}"></span>
+            </h5>
+            <small class="text-light" th:text="${'— ' + u.category + ' — ' + u.uploadedAt}"></small>
+          </div>
+          <!-- Tag selector — populated by JS based on the upload's category instance -->
+          <div class="d-flex align-items-center gap-2 ms-auto me-3"
+               th:data-photo-id="${u.id}"
+               th:data-instance-id="${u.categoryInstanceId}"
+               th:data-current-tag="${u.tag}"
+               th:id="${'tag-editor-' + u.id}">
+            <label class="form-label small mb-0 text-nowrap">Tag:</label>
+            <select class="form-select form-select-sm"
+                    style="min-width:130px"
+                    onchange="updatePhotoTag(this)"
+                    th:data-photo-id="${u.id}">
+              <option value="">— none —</option>
+            </select>
+            <span class="small text-success" th:id="${'tag-saved-' + u.id}" style="display:none">saved</span>
+          </div>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
 
@@ -353,18 +384,22 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script th:inline="javascript">
-/* Category instance data — injected server-side, used by two-step picker */
+/* Category instance and tag data — injected server-side */
 const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
+const TAGS               = /*[[${tagsJson}]]*/       [];
 </script>
 <script>
 (function () {
-  /* ── Two-step category → instance picker ─────────────── */
-  const catPicker  = document.getElementById('cat-picker');
-  const instPicker = document.getElementById('categoryInstanceId');
+  /* ── Two-step category → instance + tag picker ───────── */
+  const catPicker     = document.getElementById('cat-picker');
+  const instPicker    = document.getElementById('categoryInstanceId');
+  const tagPickerWrap = document.getElementById('tag-picker-wrap');
+  const tagPicker     = document.getElementById('tag-picker');
 
   catPicker?.addEventListener('change', function () {
-    const catId = parseInt(this.value, 10);
+    const catId   = parseInt(this.value, 10);
     const matches = CATEGORY_INSTANCES.filter(i => i.categoryId === catId);
+    const catTags = TAGS.filter(t => t.categoryId === catId);
 
     instPicker.innerHTML = '<option value="">— select a period —</option>';
     matches.forEach(i => {
@@ -374,6 +409,17 @@ const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
       instPicker.appendChild(opt);
     });
     instPicker.disabled = matches.length === 0;
+
+    // Show/hide tag picker and populate it
+    tagPicker.innerHTML = '<option value="">— select a tag —</option>';
+    catTags.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value       = t.id;
+      opt.textContent = t.name;
+      tagPicker.appendChild(opt);
+    });
+    tagPickerWrap.style.display = catTags.length > 0 ? '' : 'none';
+    tagPicker.required = catTags.length > 0;
   });
 
   /* ── Multi-file upload form ───────────────────────────── */
@@ -562,19 +608,88 @@ const CATEGORY_INSTANCES = /*[[${instancesJson}]]*/ [];
       }).catch(function () { btn.disabled = false; });
   };
 
+  /* ── Populate tag selector when a modal opens ─────────── */
+  document.addEventListener('show.bs.modal', function (e) {
+    const modal    = e.target;
+    const editor   = modal.querySelector('[id^="tag-editor-"]');
+    if (!editor) return;
+    const instanceId = parseInt(editor.dataset.instanceId, 10);
+    const currentTag = editor.dataset.currentTag || '';
+    const catId = (CATEGORY_INSTANCES.find(i => i.id === instanceId) || {}).categoryId;
+    const catTags = catId ? TAGS.filter(t => t.categoryId === catId) : [];
+    const sel = editor.querySelector('select');
+    // Only rebuild if not already populated for this modal
+    if (catTags.length === 0) {
+      editor.style.display = 'none';
+      return;
+    }
+    editor.style.display = '';
+    // Clear and repopulate
+    sel.innerHTML = '<option value="">— none —</option>';
+    catTags.forEach(function (t) {
+      const opt = document.createElement('option');
+      opt.value       = t.id;
+      opt.textContent = t.name;
+      if (t.name === currentTag) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  });
+
+  /* ── Update tag on the server ─────────────────────────── */
+  window.updatePhotoTag = function (sel) {
+    const photoId   = sel.dataset.photoId;
+    const tagId     = sel.value ? parseInt(sel.value, 10) : null;
+    const savedSpan = document.getElementById('tag-saved-' + photoId);
+    fetch('/api/photos/' + photoId + '/tag', {
+      method: 'PATCH',
+      headers: apiHeaders(),
+      body: JSON.stringify({ tagId: tagId })
+    }).then(function (r) { return r.json(); })
+      .then(function (body) {
+        // Update the badge in the table row
+        const badge = document.querySelector(
+          'tr[data-upload-id="' + photoId + '"] td .badge[class*="bg-primary"]');
+        const row = document.querySelector('tr[data-upload-id="' + photoId + '"]');
+        if (row) {
+          const tagCell = row.cells[2]; // Tag column (0-based: filename, category, tag…)
+          if (body.tag) {
+            tagCell.innerHTML = '<span class="badge bg-primary">' + body.tag + '</span>';
+          } else {
+            tagCell.innerHTML = '<span class="text-muted small">–</span>';
+          }
+        }
+        // Update the data-current-tag so re-open pre-selects correctly
+        const editor = document.getElementById(
+          'tag-editor-' + photoId);
+        if (editor) editor.dataset.currentTag = body.tag || '';
+        // Flash "saved"
+        if (savedSpan) {
+          savedSpan.style.display = '';
+          setTimeout(function () { savedSpan.style.display = 'none'; }, 1500);
+        }
+      });
+  };
+
   /* ── Approve review ───────────────────────────────────── */
   window.approveReview = function (btn) {
     const photoId = btn.dataset.photoId;
     btn.disabled  = true;
     fetch('/api/photos/' + photoId + '/approve', { method: 'POST', headers: deleteHeaders() })
-      .then(function (r) { return r.json(); })
-      .then(function () {
-        const badge = document.getElementById('status-badge-' + photoId);
-        if (badge) { badge.textContent = 'APPROVED'; badge.className = 'text-success fw-semibold'; }
+      .then(function (r) {
+        return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+      })
+      .then(function (res) {
         const msg = document.getElementById('approve-msg-' + photoId);
-        if (msg) msg.textContent = 'Entries marked as final.';
-        btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Approved';
-        btn.classList.replace('btn-success', 'btn-outline-success');
+        if (res.ok) {
+          const badge = document.getElementById('status-badge-' + photoId);
+          if (badge) { badge.textContent = 'APPROVED'; badge.className = 'text-success fw-semibold'; }
+          if (msg) { msg.textContent = 'Entries marked as final.'; msg.className = 'small text-success ms-1'; }
+          btn.innerHTML = '<i class="bi bi-check-circle-fill me-1"></i>Approved';
+          btn.classList.replace('btn-success', 'btn-outline-success');
+        } else {
+          if (msg) { msg.textContent = res.body.error || 'Approval failed.'; msg.className = 'small text-danger ms-1'; }
+          btn.disabled = false;
+        }
       })
       .catch(function () { btn.disabled = false; });
   };

@@ -3,6 +3,7 @@ package com.lastwar.ano2193.controller;
 import com.lastwar.ano2193.model.PhotoUpload;
 import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.repository.PhotoUploadRepository;
+import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.RankingService;
 import org.slf4j.Logger;
@@ -33,13 +34,16 @@ public class RankingEntryApiController {
     private final RankingService rankingService;
     private final PhotoUploadRepository photoUploadRepository;
     private final CsvService csvService;
+    private final CategoryService categoryService;
 
     public RankingEntryApiController(RankingService rankingService,
                                      PhotoUploadRepository photoUploadRepository,
-                                     CsvService csvService) {
+                                     CsvService csvService,
+                                     CategoryService categoryService) {
         this.rankingService = rankingService;
         this.photoUploadRepository = photoUploadRepository;
         this.csvService = csvService;
+        this.categoryService = categoryService;
     }
 
     @PatchMapping("/entries/{id}")
@@ -87,6 +91,7 @@ public class RankingEntryApiController {
         entry.setCategory(photo.getCategory());
         entry.setSubmittedBy(user.getUsername());
         entry.setCapturedAt(LocalDateTime.now());
+        entry.setEventTag(photo.getTag());
         rankingService.save(entry);
         csvService.exportRankingsToCsv();
         log.debug("addEntry: photoId={} new entryId={} rank={}", photoId, entry.getId(), nextRank);
@@ -129,6 +134,45 @@ public class RankingEntryApiController {
         return ResponseEntity.noContent().build();
     }
 
+    @PatchMapping("/photos/{photoId}/tag")
+    public ResponseEntity<Map<String, Object>> updatePhotoTag(
+            @PathVariable Long photoId,
+            @RequestBody Map<String, Object> body) {
+
+        Optional<PhotoUpload> opt = photoUploadRepository.findById(photoId);
+        if (opt.isEmpty()) {
+            log.debug("updatePhotoTag: photoId={} not found", photoId);
+            return ResponseEntity.notFound().build();
+        }
+        PhotoUpload photo = opt.get();
+
+        // tagId null/absent → clear the tag
+        Object tagIdRaw = body.get("tagId");
+        String tagName = null;
+        if (tagIdRaw != null) {
+            Long tagId = toLong(tagIdRaw);
+            if (tagId != null) {
+                tagName = categoryService.findTagById(tagId)
+                        .map(t -> t.getName())
+                        .orElse(null);
+            }
+        }
+
+        photo.setTag(tagName);
+        photoUploadRepository.save(photo);
+
+        // Stamp all linked ranking entries with the new tag
+        final String finalTagName = tagName;
+        if (photo.getFilename() != null) {
+            List<RankingEntry> entries = rankingService.findBySourcePhotoPath(photo.getFilename());
+            entries.forEach(e -> e.setEventTag(finalTagName));
+            rankingService.saveAll(entries);
+        }
+        csvService.exportRankingsToCsv();
+        log.debug("updatePhotoTag: photoId={} tag={}", photoId, tagName);
+        return ResponseEntity.ok(Map.of("tag", tagName != null ? tagName : ""));
+    }
+
     @PostMapping("/photos/{photoId}/approve")
     public ResponseEntity<Map<String, Object>> approveReview(@PathVariable Long photoId) {
         Optional<PhotoUpload> opt = photoUploadRepository.findById(photoId);
@@ -137,6 +181,19 @@ public class RankingEntryApiController {
             return ResponseEntity.notFound().build();
         }
         PhotoUpload photo = opt.get();
+
+        // Block approval if the category has tags and this upload has none assigned
+        if (photo.getCategoryInstanceId() != null && (photo.getTag() == null || photo.getTag().isBlank())) {
+            boolean categoryHasTags = categoryService.findInstanceById(photo.getCategoryInstanceId())
+                    .map(inst -> categoryService.countTagsByCategoryId(inst.getCategory().getId()) > 0)
+                    .orElse(false);
+            if (categoryHasTags) {
+                log.debug("approveReview: photoId={} blocked — category has tags but upload has none", photoId);
+                return ResponseEntity.badRequest().body(
+                        Map.of("error", "Cannot approve: assign a tag to this upload before approving."));
+            }
+        }
+
         photo.setStatus("APPROVED");
         photoUploadRepository.save(photo);
         csvService.exportRankingsToCsv();

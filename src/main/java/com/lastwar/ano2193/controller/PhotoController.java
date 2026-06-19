@@ -1,5 +1,6 @@
 package com.lastwar.ano2193.controller;
 
+import com.lastwar.ano2193.model.CategoryTag;
 import com.lastwar.ano2193.model.PhotoUpload;
 import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.repository.PhotoUploadRepository;
@@ -94,6 +95,19 @@ public class PhotoController {
                 .collect(Collectors.toList());
         model.addAttribute("instancesJson", instancesJson);
 
+        // Build tagsJson: flat list of {id, categoryId, name} for the JS tag picker.
+        List<Map<String, Object>> tagsJson = categoryService.findAll().stream()
+                .flatMap(c -> categoryService.findTagsByCategoryId(c.getId()).stream()
+                        .map(t -> {
+                            Map<String, Object> m = new LinkedHashMap<>();
+                            m.put("id",         t.getId());
+                            m.put("categoryId", c.getId());
+                            m.put("name",       t.getName());
+                            return m;
+                        }))
+                .collect(Collectors.toList());
+        model.addAttribute("tagsJson", tagsJson);
+
         Map<String, List<RankingEntry>> entriesByFilename = new HashMap<>();
         for (PhotoUpload u : uploads) {
             if (u.getFilename() != null) {
@@ -109,6 +123,7 @@ public class PhotoController {
     public String handleUpload(
             @RequestParam("file") List<MultipartFile> files,
             @RequestParam("categoryInstanceId") Long categoryInstanceId,
+            @RequestParam(value = "tagId", required = false) Long tagId,
             @AuthenticationPrincipal UserDetails userDetails,
             RedirectAttributes redirectAttributes) {
 
@@ -120,6 +135,11 @@ public class PhotoController {
         var instance = instanceOpt.get();
         String categoryLabel = instance.getDisplayName();
         String categoryName  = instance.getCategory().getName();
+
+        // Look up the selected tag name (null if none submitted or category has no tags)
+        final String tagName = tagId != null
+                ? categoryService.findTagById(tagId).map(CategoryTag::getName).orElse(null)
+                : null;
 
         List<MultipartFile> nonEmpty = files.stream()
                 .filter(f -> !f.isEmpty()).toList();
@@ -143,6 +163,7 @@ public class PhotoController {
             upload.setOriginalFilename(originalFilename);
             upload.setCategory(categoryLabel);
             upload.setCategoryInstanceId(categoryInstanceId);
+            upload.setTag(tagName);
             upload.setUploadedBy(userDetails.getUsername());
             upload.setUploadedAt(LocalDateTime.now());
             upload.setStatus("PROCESSING");
@@ -165,6 +186,7 @@ public class PhotoController {
                     rawOcrText = imageParsingService.extractRawText(target.toFile());
                     entries = imageParsingService.parseOcrText(
                             rawOcrText, categoryName, userDetails.getUsername(), storedName);
+                    entries.forEach(e -> e.setEventTag(tagName));
                     log.info("handleUpload: OCR complete storedName={} entriesExtracted={}", storedName, entries.size());
                 } catch (OcrException e) {
                     ocrFailed = true;
@@ -248,6 +270,7 @@ public class PhotoController {
                 rawOcrText = imageParsingService.extractRawText(filePath.toFile());
                 entries = imageParsingService.parseOcrText(
                         rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
+                entries.forEach(e -> e.setEventTag(upload.getTag()));
                 log.info("reparsePhoto: OCR complete storedName={} entriesExtracted={}", upload.getFilename(), entries.size());
             } catch (OcrException e) {
                 ocrFailed = true;
@@ -308,6 +331,7 @@ public class PhotoController {
 
             List<RankingEntry> entries = imageParsingService.parseOcrText(
                     rawOcrText, upload.getCategory(), userDetails.getUsername(), upload.getFilename());
+            entries.forEach(e -> e.setEventTag(upload.getTag()));
             log.info("remapPhoto: extracted {} entries for id={}", entries.size(), id);
 
             rankingService.saveAll(entries);

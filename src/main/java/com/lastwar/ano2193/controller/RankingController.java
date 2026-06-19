@@ -1,5 +1,6 @@
 package com.lastwar.ano2193.controller;
 
+import com.lastwar.ano2193.model.CategoryTag;
 import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.repository.PhotoUploadRepository;
 import com.lastwar.ano2193.service.CategoryService;
@@ -12,7 +13,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +38,25 @@ public class RankingController {
         this.rankingService = rankingService;
         this.categoryService = categoryService;
         this.photoUploadRepository = photoUploadRepository;
+    }
+
+    public static class PivotRow {
+        public final String playerName;
+        public final String allianceTag;
+        public final Map<String, Long> scores = new HashMap<>();
+
+        public PivotRow(String playerName, String allianceTag) {
+            this.playerName  = playerName;
+            this.allianceTag = allianceTag;
+        }
+
+        public long getTotal() {
+            return scores.values().stream().mapToLong(Long::longValue).sum();
+        }
+
+        public Long getScore(String tag) {
+            return scores.get(tag);
+        }
     }
 
     @GetMapping
@@ -71,23 +93,46 @@ public class RankingController {
             model.addAttribute("selectedInstanceId",  instanceId);
             model.addAttribute("selectedCategoryId",  inst.getCategory().getId());
 
+            // Only APPROVED uploads count in the rankings view
             List<String> filenames = photoUploadRepository
-                    .findByCategoryInstanceId(instanceId).stream()
+                    .findByCategoryInstanceIdAndStatus(instanceId, "APPROVED").stream()
                     .map(u -> u.getFilename())
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            List<RankingEntry> entries = rankingService
-                    .findBySourcePhotoPathIn(filenames).stream()
-                    .sorted(Comparator.comparing(RankingEntry::getPower,
-                                    Comparator.nullsLast(Comparator.reverseOrder()))
-                            .thenComparing(RankingEntry::getKills,
-                                    Comparator.nullsLast(Comparator.reverseOrder())))
-                    .collect(Collectors.toList());
+            List<CategoryTag> tags = categoryService.findTagsByCategoryId(inst.getCategory().getId());
 
-            log.debug("rankings: instanceId={} filenames={} entries={}", instanceId, filenames.size(), entries.size());
-            model.addAttribute("entries",     entries);
-            model.addAttribute("photoCount",  filenames.size());
+            List<RankingEntry> entries = rankingService.findBySourcePhotoPathIn(filenames);
+
+            log.debug("rankings: instanceId={} approvedFiles={} tags={} entries={}",
+                    instanceId, filenames.size(), tags.size(), entries.size());
+
+            if (!tags.isEmpty()) {
+                // Pivot: one row per player, one column per tag
+                Map<String, PivotRow> pivot = new LinkedHashMap<>();
+                for (RankingEntry e : entries) {
+                    if (e.getPlayerName() == null) continue;
+                    PivotRow row = pivot.computeIfAbsent(e.getPlayerName(),
+                            k -> new PivotRow(e.getPlayerName(), e.getAllianceTag()));
+                    if (e.getEventTag() != null && e.getPower() != null) {
+                        // Keep the highest score if the same tag appears more than once
+                        row.scores.merge(e.getEventTag(), e.getPower(), Math::max);
+                    }
+                }
+                List<PivotRow> pivotRows = new ArrayList<>(pivot.values());
+                pivotRows.sort(Comparator.comparingLong(PivotRow::getTotal).reversed());
+                model.addAttribute("tags",      tags);
+                model.addAttribute("pivotRows", pivotRows);
+            } else {
+                List<RankingEntry> sorted = entries.stream()
+                        .sorted(Comparator.comparing(RankingEntry::getPower,
+                                        Comparator.nullsLast(Comparator.reverseOrder()))
+                                .thenComparing(RankingEntry::getKills,
+                                        Comparator.nullsLast(Comparator.reverseOrder())))
+                        .collect(Collectors.toList());
+                model.addAttribute("entries",    sorted);
+            }
+            model.addAttribute("photoCount", filenames.size());
         }, () -> {
             log.warn("rankings: instanceId={} not found", instanceId);
             model.addAttribute("selectedInstanceId", null);

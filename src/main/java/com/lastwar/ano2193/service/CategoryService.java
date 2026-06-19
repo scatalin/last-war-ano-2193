@@ -1,8 +1,10 @@
 package com.lastwar.ano2193.service;
 
 import com.lastwar.ano2193.model.CategoryInstance;
+import com.lastwar.ano2193.model.CategoryTag;
 import com.lastwar.ano2193.model.UploadCategory;
 import com.lastwar.ano2193.repository.CategoryInstanceRepository;
+import com.lastwar.ano2193.repository.CategoryTagRepository;
 import com.lastwar.ano2193.repository.UploadCategoryRepository;
 import org.springframework.stereotype.Service;
 
@@ -14,10 +16,14 @@ public class CategoryService {
 
     private final UploadCategoryRepository repo;
     private final CategoryInstanceRepository instanceRepo;
+    private final CategoryTagRepository tagRepo;
 
-    public CategoryService(UploadCategoryRepository repo, CategoryInstanceRepository instanceRepo) {
+    public CategoryService(UploadCategoryRepository repo,
+                           CategoryInstanceRepository instanceRepo,
+                           CategoryTagRepository tagRepo) {
         this.repo = repo;
         this.instanceRepo = instanceRepo;
+        this.tagRepo = tagRepo;
     }
 
     // ── Category definitions ──────────────────────────────────────────────────
@@ -67,5 +73,27 @@ public class CategoryService {
 
     public void deleteInstance(Long id) {
         instanceRepo.deleteById(id);
+    }
+
+    // ── Category tags ─────────────────────────────────────────────────────────
+
+    public List<CategoryTag> findTagsByCategoryId(Long categoryId) {
+        return tagRepo.findByCategoryIdOrderByDisplayOrder(categoryId);
+    }
+
+    public long countTagsByCategoryId(Long categoryId) {
+        return tagRepo.countByCategoryId(categoryId);
+    }
+
+    public CategoryTag saveTag(CategoryTag tag) {
+        return tagRepo.save(tag);
+    }
+
+    public void deleteTag(Long tagId) {
+        tagRepo.deleteById(tagId);
+    }
+
+    public Optional<CategoryTag> findTagById(Long tagId) {
+        return tagRepo.findById(tagId);
     }
 }

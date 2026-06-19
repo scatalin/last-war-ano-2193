@@ -23,6 +23,8 @@ public class RankingEntry {
     private String submittedBy;
     private LocalDateTime capturedAt;
 
+    private String eventTag;
+
     @ElementCollection
     @CollectionTable(name = "ranking_metadata", joinColumns = @JoinColumn(name = "entry_id"))
     @MapKeyColumn(name = "meta_key")
@@ -58,6 +60,9 @@ public class RankingEntry {
 
     public LocalDateTime getCapturedAt() { return capturedAt; }
     public void setCapturedAt(LocalDateTime capturedAt) { this.capturedAt = capturedAt; }
+
+    public String getEventTag() { return eventTag; }
+    public void setEventTag(String eventTag) { this.eventTag = eventTag; }
 
     public Map<String, String> getMetadata() { return metadata; }
     public void setMetadata(Map<String, String> metadata) { this.metadata = metadata; }

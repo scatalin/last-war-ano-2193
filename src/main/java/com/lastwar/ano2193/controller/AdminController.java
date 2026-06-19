@@ -1,6 +1,7 @@
 package com.lastwar.ano2193.controller;
 
 import com.lastwar.ano2193.model.CategoryInstance;
+import com.lastwar.ano2193.model.CategoryTag;
 import com.lastwar.ano2193.model.UploadCategory;
 import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
@@ -15,7 +16,9 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/admin")
@@ -117,8 +120,14 @@ public class AdminController {
     @GetMapping("/categories")
     public String categories(Model model) {
         log.debug("GET /admin/categories");
-        model.addAttribute("categories", categoryService.findAll());
+        List<UploadCategory> cats = categoryService.findAll();
+        Map<Long, List<CategoryTag>> tagsByCategory = cats.stream()
+                .collect(Collectors.toMap(
+                        UploadCategory::getId,
+                        c -> categoryService.findTagsByCategoryId(c.getId())));
+        model.addAttribute("categories", cats);
         model.addAttribute("instances", categoryService.findAllInstances());
+        model.addAttribute("tagsByCategory", tagsByCategory);
         return "admin/categories";
     }
 
@@ -212,6 +221,45 @@ public class AdminController {
         log.debug("POST /admin/categories/instances/delete/{}", id);
         categoryService.deleteInstance(id);
         redirectAttributes.addFlashAttribute("success", "Instance deleted.");
+        return "redirect:/admin/categories";
+    }
+
+    // ── Category tags ─────────────────────────────────────────────────────────
+
+    @PostMapping("/categories/{categoryId}/tags/add")
+    public String addTag(@PathVariable Long categoryId,
+                         @RequestParam String name,
+                         RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/{}/tags/add name={}", categoryId, name);
+        return categoryService.findById(categoryId).map(cat -> {
+            if (categoryService.countTagsByCategoryId(categoryId) >= 10) {
+                redirectAttributes.addFlashAttribute("error", "Maximum 10 tags per category.");
+                return "redirect:/admin/categories";
+            }
+            String safeName = name.trim();
+            if (safeName.isEmpty()) {
+                redirectAttributes.addFlashAttribute("error", "Tag name is required.");
+                return "redirect:/admin/categories";
+            }
+            int nextOrder = (int) categoryService.countTagsByCategoryId(categoryId);
+            CategoryTag tag = new CategoryTag();
+            tag.setCategory(cat);
+            tag.setName(safeName);
+            tag.setDisplayOrder(nextOrder);
+            categoryService.saveTag(tag);
+            redirectAttributes.addFlashAttribute("success", "Tag added: " + safeName);
+            return "redirect:/admin/categories";
+        }).orElseGet(() -> {
+            redirectAttributes.addFlashAttribute("error", "Category not found.");
+            return "redirect:/admin/categories";
+        });
+    }
+
+    @PostMapping("/categories/tags/delete/{tagId}")
+    public String deleteTag(@PathVariable Long tagId, RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/categories/tags/delete/{}", tagId);
+        categoryService.deleteTag(tagId);
+        redirectAttributes.addFlashAttribute("success", "Tag deleted.");
         return "redirect:/admin/categories";
     }
 }

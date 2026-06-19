@@ -14,4 +14,6 @@ public interface PhotoUploadRepository extends JpaRepository<PhotoUpload, Long> 
     Optional<PhotoUpload> findByFilename(String filename);
 
     List<PhotoUpload> findByCategoryInstanceId(Long categoryInstanceId);
+
+    List<PhotoUpload> findByCategoryInstanceIdAndStatus(Long categoryInstanceId, String status);
 }
