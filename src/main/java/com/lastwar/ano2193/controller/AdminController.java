@@ -1,10 +1,12 @@
 package com.lastwar.ano2193.controller;
 
 import com.lastwar.ano2193.config.GoogleSheetsConfig;
+import com.lastwar.ano2193.model.AppSetting;
 import com.lastwar.ano2193.model.CategoryInstance;
 import com.lastwar.ano2193.model.CategoryTag;
 import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.model.UploadCategory;
+import com.lastwar.ano2193.repository.AppSettingRepository;
 import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
 import com.lastwar.ano2193.service.GoogleSheetsService;
@@ -35,16 +37,19 @@ public class AdminController {
     private final CategoryService categoryService;
     private final GoogleSheetsService googleSheetsService;
     private final GoogleSheetsConfig googleSheetsConfig;
+    private final AppSettingRepository appSettings;
 
     public AdminController(UserService userService, RankingService rankingService,
                            CsvService csvService, CategoryService categoryService,
-                           GoogleSheetsService googleSheetsService, GoogleSheetsConfig googleSheetsConfig) {
+                           GoogleSheetsService googleSheetsService, GoogleSheetsConfig googleSheetsConfig,
+                           AppSettingRepository appSettings) {
         this.userService = userService;
         this.rankingService = rankingService;
         this.csvService = csvService;
         this.categoryService = categoryService;
         this.googleSheetsService = googleSheetsService;
         this.googleSheetsConfig = googleSheetsConfig;
+        this.appSettings = appSettings;
     }
 
     @GetMapping
@@ -149,7 +154,28 @@ public class AdminController {
     public String sheetsSettings(Model model) {
         log.debug("GET /admin/sheets");
         model.addAttribute("config", googleSheetsConfig);
+        model.addAttribute("effectiveTab", googleSheetsService.getEffectiveSheetName());
+        if (googleSheetsConfig.isConfigured()) {
+            try {
+                model.addAttribute("availableTabs", googleSheetsService.listSheetTabs());
+            } catch (Exception e) {
+                log.warn("Could not fetch sheet tabs: {}", e.getMessage());
+                model.addAttribute("tabFetchError", e.getMessage());
+            }
+        }
         return "admin/sheets";
+    }
+
+    @PostMapping("/sheets/tab")
+    public String saveSheetTab(@RequestParam String tabName, RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/sheets/tab tabName={}", tabName);
+        String trimmed = tabName.trim();
+        AppSetting setting = appSettings.findById("sheets.tab").orElse(new AppSetting());
+        setting.setKey("sheets.tab");
+        setting.setValue(trimmed);
+        appSettings.save(setting);
+        redirectAttributes.addFlashAttribute("success", "Target sheet tab set to: " + trimmed);
+        return "redirect:/admin/sheets";
     }
 
     @PostMapping("/sheets/test")

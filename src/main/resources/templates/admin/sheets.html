@@ -16,11 +16,11 @@
   <h2 class="mb-4">Google Sheets Integration</h2>
 
   <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
-  <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+  <div th:if="${error}"   class="alert alert-danger"  th:text="${error}"></div>
 
-  <!-- Status card -->
+  <!-- Connection config status -->
   <div class="card bg-secondary bg-opacity-25 border-secondary mb-4">
-    <div class="card-header fw-semibold">Current Configuration</div>
+    <div class="card-header fw-semibold">Connection Configuration</div>
     <div class="card-body">
       <dl class="row mb-0">
         <dt class="col-sm-4 text-secondary">Enabled</dt>
@@ -34,7 +34,7 @@
           <code th:if="${config.credentialsFile != null and !#strings.isEmpty(config.credentialsFile)}"
                 th:text="${config.credentialsFile}"></code>
           <span th:unless="${config.credentialsFile != null and !#strings.isEmpty(config.credentialsFile)}"
-                class="text-danger">(not set — set GOOGLE_SHEETS_CREDENTIALS_FILE)</span>
+                class="text-danger">(not set — GOOGLE_SHEETS_CREDENTIALS_FILE)</span>
         </dd>
 
         <dt class="col-sm-4 text-secondary">Spreadsheet ID</dt>
@@ -42,26 +42,68 @@
           <code th:if="${config.spreadsheetId != null and !#strings.isEmpty(config.spreadsheetId)}"
                 th:text="${config.spreadsheetId}"></code>
           <span th:unless="${config.spreadsheetId != null and !#strings.isEmpty(config.spreadsheetId)}"
-                class="text-danger">(not set — set GOOGLE_SHEETS_SPREADSHEET_ID)</span>
+                class="text-danger">(not set — GOOGLE_SHEETS_SPREADSHEET_ID)</span>
         </dd>
-
-        <dt class="col-sm-4 text-secondary">Sheet Tab Name</dt>
-        <dd class="col-sm-8"><code th:text="${config.sheetName}"></code></dd>
       </dl>
     </div>
   </div>
 
-  <!-- Actions (only when configured) -->
+  <!-- Target sheet tab selector -->
+  <div class="card bg-secondary bg-opacity-25 border-secondary mb-4">
+    <div class="card-header fw-semibold">Target Sheet Tab</div>
+    <div class="card-body">
+
+      <!-- Show available tabs fetched from the spreadsheet -->
+      <div th:if="${availableTabs != null}">
+        <p class="text-secondary small mb-2">
+          Select the tab where data will be appended. Current:
+          <strong th:text="${effectiveTab}"></strong>
+        </p>
+        <form method="post" th:action="@{/admin/sheets/tab}" class="d-flex align-items-start gap-3 flex-wrap">
+          <div>
+            <th:block th:each="tab : ${availableTabs}">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="tabName"
+                       th:id="${'tab-' + tabStat.index}"
+                       th:value="${tab}"
+                       th:checked="${tab == effectiveTab}">
+                <label class="form-check-label" th:for="${'tab-' + tabStat.index}" th:text="${tab}"></label>
+              </div>
+            </th:block>
+          </div>
+          <button type="submit" class="btn btn-primary btn-sm">Save</button>
+        </form>
+      </div>
+
+      <!-- Tab list couldn't be fetched — let admin type it in -->
+      <div th:unless="${availableTabs != null}">
+        <div th:if="${tabFetchError}" class="alert alert-warning small py-2 mb-2"
+             th:text="'Could not load tab list: ' + ${tabFetchError}"></div>
+        <form method="post" th:action="@{/admin/sheets/tab}" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label text-secondary small mb-1">Tab name</label>
+            <input type="text" name="tabName" class="form-control form-control-sm bg-dark text-light border-secondary"
+                   th:value="${effectiveTab}" placeholder="e.g. Rankings">
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+          </div>
+        </form>
+        <p class="text-secondary small mt-2 mb-0"
+           th:unless="${config.configured}">Connect first to see the available tabs.</p>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Actions -->
   <div th:if="${config.configured}" class="d-flex gap-2 mb-4">
     <form method="post" th:action="@{/admin/sheets/test}">
       <button type="submit" class="btn btn-outline-info">Test Connection</button>
     </form>
     <form method="post" th:action="@{/admin/data/export-sheets}">
-      <button type="submit" class="btn btn-success">Export to Google Sheets</button>
+      <button type="submit" class="btn btn-success">Append to Google Sheets</button>
     </form>
-  </div>
-  <div th:unless="${config.configured}" class="alert alert-secondary small mb-4">
-    Complete the configuration below, then restart the app to enable the actions.
   </div>
 
   <!-- Setup instructions -->
@@ -69,38 +111,18 @@
     <div class="card-header fw-semibold">Setup Instructions</div>
     <div class="card-body small">
       <ol class="mb-0 lh-lg">
-        <li>
-          Open <strong>Google Cloud Console</strong>, create or select a project, and enable
-          the <strong>Google Sheets API</strong>.
-        </li>
-        <li>
-          Under <em>IAM &amp; Admin → Service Accounts</em>, create a service account.
-          Generate a <strong>JSON key</strong> and save it somewhere safe on the server,
-          e.g. <code>/etc/lastwar/service-account.json</code>.
-        </li>
-        <li>
-          Open the target Google Sheet, click <em>Share</em>, and grant <strong>Editor</strong>
-          access to the service account email (the <code>"client_email"</code> field inside the JSON key).
-        </li>
-        <li>
-          Copy the <strong>Spreadsheet ID</strong> from the sheet URL:<br>
-          <code>https://docs.google.com/spreadsheets/d/<strong>&lt;SPREADSHEET_ID&gt;</strong>/edit</code>
-        </li>
-        <li>
-          Set the following environment variables before starting the app:
+        <li>Open <strong>Google Cloud Console</strong>, create or select a project, and enable the <strong>Google Sheets API</strong>.</li>
+        <li>Under <em>IAM &amp; Admin → Service Accounts</em>, create a service account. Generate a <strong>JSON key</strong> and save it on the server, e.g. <code>/etc/lastwar/service-account.json</code>.</li>
+        <li>Open the target Google Sheet, click <em>Share</em>, and grant <strong>Editor</strong> access to the service account email (the <code>"client_email"</code> field inside the JSON key).</li>
+        <li>Copy the <strong>Spreadsheet ID</strong> from the sheet URL:<br>
+          <code>https://docs.google.com/spreadsheets/d/<strong>&lt;SPREADSHEET_ID&gt;</strong>/edit</code></li>
+        <li>Set the following environment variables and restart the app:
           <pre class="bg-dark border border-secondary rounded p-3 mt-2 mb-0">GOOGLE_SHEETS_ENABLED=true
 GOOGLE_SHEETS_CREDENTIALS_FILE=/etc/lastwar/service-account.json
-GOOGLE_SHEETS_SPREADSHEET_ID=&lt;your_spreadsheet_id&gt;
-GOOGLE_SHEETS_SHEET_NAME=Rankings    # optional, default is Rankings</pre>
+GOOGLE_SHEETS_SPREADSHEET_ID=&lt;your_spreadsheet_id&gt;</pre>
         </li>
-        <li>
-          Restart the app, return to this page, and click <strong>Test Connection</strong>
-          to verify everything works.
-        </li>
-        <li>
-          Use <strong>Export to Google Sheets</strong> (here or on the Data page) to push
-          all ranking entries. The sheet tab is fully rewritten on each export.
-        </li>
+        <li>Return here, click <strong>Test Connection</strong> to verify, then select the target tab.</li>
+        <li>Use <strong>Append to Google Sheets</strong> to push ranking entries. Rows are always added after the last occupied row — existing data is never modified.</li>
       </ol>
     </div>
   </div>
