@@ -17,10 +17,15 @@
 
   <div th:if="${success}" class="alert alert-success" th:text="${success}"></div>
 
+  <div th:if="${error}" class="alert alert-danger" th:text="${error}"></div>
+
   <!-- Toolbar -->
   <div class="d-flex gap-2 mb-4">
     <form method="post" th:action="@{/admin/data/export}">
       <button type="submit" class="btn btn-success">⬇ Export to CSV</button>
+    </form>
+    <form method="post" th:action="@{/admin/data/export-sheets}">
+      <button type="submit" class="btn btn-outline-success">⬆ Export to Google Sheets</button>
     </form>
   </div>
 

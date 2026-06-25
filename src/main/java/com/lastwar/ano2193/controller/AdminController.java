@@ -1,10 +1,13 @@
 package com.lastwar.ano2193.controller;
 
+import com.lastwar.ano2193.config.GoogleSheetsConfig;
 import com.lastwar.ano2193.model.CategoryInstance;
 import com.lastwar.ano2193.model.CategoryTag;
+import com.lastwar.ano2193.model.RankingEntry;
 import com.lastwar.ano2193.model.UploadCategory;
 import com.lastwar.ano2193.service.CategoryService;
 import com.lastwar.ano2193.service.CsvService;
+import com.lastwar.ano2193.service.GoogleSheetsService;
 import com.lastwar.ano2193.service.RankingService;
 import com.lastwar.ano2193.service.UserService;
 import org.slf4j.Logger;
@@ -30,13 +33,18 @@ public class AdminController {
     private final RankingService rankingService;
     private final CsvService csvService;
     private final CategoryService categoryService;
+    private final GoogleSheetsService googleSheetsService;
+    private final GoogleSheetsConfig googleSheetsConfig;
 
     public AdminController(UserService userService, RankingService rankingService,
-                           CsvService csvService, CategoryService categoryService) {
+                           CsvService csvService, CategoryService categoryService,
+                           GoogleSheetsService googleSheetsService, GoogleSheetsConfig googleSheetsConfig) {
         this.userService = userService;
         this.rankingService = rankingService;
         this.csvService = csvService;
         this.categoryService = categoryService;
+        this.googleSheetsService = googleSheetsService;
+        this.googleSheetsConfig = googleSheetsConfig;
     }
 
     @GetMapping
@@ -113,6 +121,54 @@ public class AdminController {
         csvService.exportRankingsToCsv();
         redirectAttributes.addFlashAttribute("success", "Data exported to CSV.");
         return "redirect:/admin/data";
+    }
+
+    @PostMapping("/data/export-sheets")
+    public String exportToSheets(RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/data/export-sheets");
+        if (!googleSheetsConfig.isConfigured()) {
+            redirectAttributes.addFlashAttribute("error",
+                    "Google Sheets is not configured. See Admin → Google Sheets.");
+            return "redirect:/admin/data";
+        }
+        try {
+            List<RankingEntry> entries = rankingService.findAll();
+            int count = googleSheetsService.exportRankings(entries);
+            redirectAttributes.addFlashAttribute("success",
+                    "Exported " + count + " entries to Google Sheets.");
+        } catch (Exception e) {
+            log.warn("Google Sheets export failed", e);
+            redirectAttributes.addFlashAttribute("error", "Export failed: " + e.getMessage());
+        }
+        return "redirect:/admin/data";
+    }
+
+    // ─── Google Sheets settings ───────────────────────────────────────────────
+
+    @GetMapping("/sheets")
+    public String sheetsSettings(Model model) {
+        log.debug("GET /admin/sheets");
+        model.addAttribute("config", googleSheetsConfig);
+        return "admin/sheets";
+    }
+
+    @PostMapping("/sheets/test")
+    public String testSheetsConnection(RedirectAttributes redirectAttributes) {
+        log.debug("POST /admin/sheets/test");
+        if (!googleSheetsConfig.isConfigured()) {
+            redirectAttributes.addFlashAttribute("error",
+                    "Google Sheets is not configured. Set the required environment variables first.");
+            return "redirect:/admin/sheets";
+        }
+        try {
+            String title = googleSheetsService.testConnection();
+            redirectAttributes.addFlashAttribute("success",
+                    "Connected! Spreadsheet title: \"" + title + "\"");
+        } catch (Exception e) {
+            log.warn("Google Sheets test connection failed", e);
+            redirectAttributes.addFlashAttribute("error", "Connection failed: " + e.getMessage());
+        }
+        return "redirect:/admin/sheets";
     }
 
     // ─── Category management ──────────────────────────────────────────────────
